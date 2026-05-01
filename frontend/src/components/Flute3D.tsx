@@ -29,24 +29,61 @@ const Flute3D: React.FC<Flute3DProps> = ({ holeStates }) => {
         />
       </Cylinder>
 
-      {/* Holes */}
-      {[0, 1, 2, 3, 4, 5].map((idx) => (
-        <mesh key={idx} position={[0, (idx - 2.5) * 0.8, 0.3]}>
-          <circleGeometry args={[0.1, 32]} />
-          <meshBasicMaterial 
-            color={holeStates[idx] ? "#00f2ff" : "#111"} 
-            transparent
-            opacity={0.8}
-          />
-          {holeStates[idx] && (
-            <pointLight 
-              color="#00f2ff" 
-              intensity={2} 
-              distance={1} 
-            />
-          )}
-        </mesh>
-      ))}
+      {/* Holes with enhanced glow effects */}
+      {[0, 1, 2, 3, 4, 5].map((idx) => {
+        const isActive = holeStates[idx];
+        const glowIntensity = isActive ? 2 : 0;
+        
+        return (
+          <group key={idx} position={[0, (idx - 2.5) * 0.8, 0.3]}>
+            {/* Hole base */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[0.12, 32]} />
+              <meshStandardMaterial 
+                color={isActive ? "#00f2ff" : "#1a1a1a"}
+                emissive={isActive ? "#00f2ff" : "#000000"}
+                emissiveIntensity={isActive ? 1.5 : 0}
+                transparent
+                opacity={0.9}
+              />
+            </mesh>
+            
+            {/* Inner glow ring */}
+            {isActive && (
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.08, 0.12, 32]} />
+                <meshBasicMaterial 
+                  color="#00f2ff"
+                  transparent
+                  opacity={0.6}
+                />
+              </mesh>
+            )}
+            
+            {/* Outer glow effect */}
+            {isActive && (
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.12, 0.2, 32]} />
+                <meshBasicMaterial 
+                  color="#00f2ff"
+                  transparent
+                  opacity={0.2}
+                />
+              </mesh>
+            )}
+            
+            {/* Point light for glow */}
+            {isActive && (
+              <pointLight 
+                color="#00f2ff" 
+                intensity={glowIntensity} 
+                distance={1.5} 
+                decay={2}
+              />
+            )}
+          </group>
+        );
+      })}
 
       {/* Bamboo Bindings (Threads) */}
       {[-3.5, -2, 0, 2, 3.5].map((pos, idx) => (

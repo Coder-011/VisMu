@@ -81,11 +81,11 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 flex flex-col gap-4 sm:gap-6" style={{ paddingBottom: '6rem' }}>
 
-      {/* Top grid: video + pitch/holes */}
+      {/* Top grid: video + 3D model + pitch/holes */}
       <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6">
 
-        {/* Video Feed */}
-        <div className="lg:col-span-8 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden relative">
+        {/* Video Feed - Made smaller to fit with 3D model */}
+        <div className="lg:col-span-5 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden relative">
           <div className="absolute top-3 left-4 z-10 flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${handTrackingActive ? 'bg-[#00f2ff] shadow-[0_0_8px_#00f2ff] animate-pulse' : 'bg-red-500'}`} />
             <span className="text-[10px] font-bold tracking-widest text-gray-300">
@@ -99,6 +99,23 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
           <div className="aspect-video bg-neutral-900 relative">
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none z-10" />
             <WebcamView initialized={initialized} />
+          </div>
+        </div>
+
+        {/* 3D Flute Visualization - Moved up to be on same level as video */}
+        <div className="lg:col-span-4 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
+          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+            <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
+            <p className="text-[9px] text-gray-600">Drag to rotate</p>
+          </div>
+          <div className="h-48 sm:h-64">
+            <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
+              <ambientLight intensity={0.4} />
+              <pointLight position={[5, 5, 5]} intensity={1} />
+              <pointLight position={[-5, -5, -5]} intensity={0.3} color="#00f2ff" />
+              <Flute3D holeStates={holeStates} />
+              <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
+            </Canvas>
           </div>
           <div className="p-3 flex space-x-8">
             <div>
@@ -116,8 +133,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
           </div>
         </div>
 
-        {/* Right Column */}
-        <div className="lg:col-span-4 flex flex-col gap-4 sm:gap-6">
+        {/* Right Column - Pitch and Holes */}
+        <div className="lg:col-span-3 flex flex-col gap-4 sm:gap-6">
           {/* Current Pitch */}
           <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-6 flex flex-col items-center justify-center space-y-4">
             <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em]">CURRENT PITCH</p>
@@ -157,23 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
               <span className="bg-[#111] px-3 py-1 rounded text-xs font-mono text-[#00f2ff]">{totalHolesClosed} / 6</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* 3D Flute Visualization */}
-      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
-        <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-          <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
-          <p className="text-[9px] text-gray-600">Drag to rotate</p>
-        </div>
-        <div className="h-48 sm:h-64">
-          <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
-            <ambientLight intensity={0.4} />
-            <pointLight position={[5, 5, 5]} intensity={1} />
-            <pointLight position={[-5, -5, -5]} intensity={0.3} color="#00f2ff" />
-            <Flute3D holeStates={holeStates} />
-            <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
-          </Canvas>
         </div>
       </div>
 

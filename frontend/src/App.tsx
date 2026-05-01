@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
-import { RefreshCcw, Settings, User, Menu } from 'lucide-react';
+import { RefreshCcw, Settings, User, Menu, X } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import { audioEngine } from './systems/audioEngine';
 
@@ -39,6 +39,17 @@ class ErrorBoundary extends React.Component<
 const App: React.FC = () => {
   const [initialized, setInitialized] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [activeTab, setActiveTab] = useState('Studio');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [sidebarActiveItem, setSidebarActiveItem] = useState('PERFORMANCE');
+  const [showSidebarMessage, setShowSidebarMessage] = useState('');
+
+  const handleSidebarItemClick = (label: string) => {
+    setSidebarActiveItem(label);
+    setShowSidebarMessage(` ${label} functionality coming soon...`);
+    setTimeout(() => setShowSidebarMessage(''), 3000);
+  };
 
   const startSystem = async () => {
     try {
@@ -84,13 +95,17 @@ const App: React.FC = () => {
 
         {/* Sidebar */}
         <div className={`fixed lg:relative z-50 lg:z-auto h-full transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-          <Sidebar onClose={() => setSidebarOpen(false)} />
+          <Sidebar 
+            onClose={() => setSidebarOpen(false)} 
+            activeItem={sidebarActiveItem}
+            onItemClick={handleSidebarItemClick}
+          />
         </div>
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0 w-full">
           {/* Header */}
-          <header className="h-14 sm:h-16 border-b border-[#1a1a1a] flex items-center justify-between px-4 sm:px-8 bg-[#0a0a0a] shrink-0">
+          <header className="h-14 sm:h-16 border-b border-[#1a1a1a] flex items-center justify-between px-4 sm:px-8 bg-[#0a0a0a] shrink-0 relative">
             <div className="flex items-center space-x-4 sm:space-x-12">
               <button
                 className="lg:hidden text-gray-400 hover:text-white mr-2"
@@ -105,8 +120,9 @@ const App: React.FC = () => {
                 {['Studio', 'Library', 'Live', 'Nodes'].map((item) => (
                   <button
                     key={item}
+                    onClick={() => setActiveTab(item)}
                     className={`text-[11px] font-bold tracking-widest uppercase pb-1 transition-all ${
-                      item === 'Studio'
+                      item === activeTab
                         ? 'text-white border-b-2 border-[#00f2ff]'
                         : 'text-gray-500 hover:text-gray-300'
                     }`}
@@ -121,18 +137,67 @@ const App: React.FC = () => {
               <button className="hover:text-[#00f2ff] transition-colors" onClick={() => window.location.reload()}>
                 <RefreshCcw size={18} />
               </button>
-              <button className="hover:text-[#00f2ff] transition-colors">
+              <button className="hover:text-[#00f2ff] transition-colors relative" onClick={() => {
+                setShowSettings(!showSettings);
+                setShowUserMenu(false);
+              }}>
                 <Settings size={18} />
+                {showSettings && (
+                  <div className="absolute top-12 right-0 w-64 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-4 shadow-2xl z-50">
+                    <h3 className="text-xs font-bold text-white mb-3">Settings</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-400">Audio Enabled</span>
+                        <input type="checkbox" defaultChecked className="toggle toggle-xs" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-400">Hand Tracking</span>
+                        <input type="checkbox" defaultChecked className="toggle toggle-xs" />
+                      </div>
+                      <div className="pt-2 border-t border-[#1a1a1a]">
+                        <button className="text-[10px] text-[#00f2ff] hover:underline">Reset All Settings</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </button>
-              <button className="hover:text-[#00f2ff] transition-colors">
+              <button className="hover:text-[#00f2ff] transition-colors relative" onClick={() => {
+                setShowUserMenu(!showUserMenu);
+                setShowSettings(false);
+              }}>
                 <User size={18} />
+                {showUserMenu && (
+                  <div className="absolute top-12 right-0 w-48 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-4 shadow-2xl z-50">
+                    <div className="space-y-2">
+                      <button className="block w-full text-left text-[10px] text-gray-300 hover:text-white py-1">Profile</button>
+                      <button className="block w-full text-left text-[10px] text-gray-300 hover:text-white py-1">History</button>
+                      <button className="block w-full text-left text-[10px] text-gray-300 hover:text-white py-1">Sign Out</button>
+                    </div>
+                  </div>
+                )}
               </button>
             </div>
           </header>
 
           {/* Content Area */}
-          <main className="flex-1 overflow-auto">
-            <Dashboard initialized={initialized} />
+          <main className="flex-1 overflow-auto relative">
+            {activeTab === 'Studio' && <Dashboard initialized={initialized} />}
+            {activeTab === 'Library' && (
+              <div className="p-8 text-center text-gray-500 text-sm">Library content coming soon...</div>
+            )}
+            {activeTab === 'Live' && (
+              <div className="p-8 text-center text-gray-500 text-sm">Live performance mode coming soon...</div>
+            )}
+            {activeTab === 'Nodes' && (
+              <div className="p-8 text-center text-gray-500 text-sm">Node editor coming soon...</div>
+            )}
+            
+            {/* Sidebar action feedback message */}
+            {showSidebarMessage && (
+              <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-[#00f2ff] text-black px-4 py-2 rounded-lg text-xs font-bold z-50 shadow-lg">
+                {showSidebarMessage}
+              </div>
+            )}
           </main>
         </div>
       </div>

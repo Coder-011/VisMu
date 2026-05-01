@@ -13,16 +13,24 @@ import {
 
 interface SidebarProps {
   onClose?: () => void;
+  activeItem?: string;
+  onItemClick?: (label: string) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', onItemClick }) => {
   const menuItems = [
-    { icon: BarChart3, label: 'PERFORMANCE', active: true },
+    { icon: BarChart3, label: 'PERFORMANCE', active: false },
     { icon: Music, label: 'NOTE MAPPING', active: false },
     { icon: Eye, label: 'VISUALIZER', active: false },
     { icon: Speaker, label: 'AUDIO IO', active: false },
     { icon: Unplug, label: 'MIDI', active: false },
   ];
+
+  const handleClick = (label: string) => {
+    if (onItemClick) {
+      onItemClick(label);
+    }
+  };
 
   return (
     <div className="w-64 h-full bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col p-6">
@@ -42,8 +50,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
         {menuItems.map((item) => (
           <button
             key={item.label}
+            onClick={() => handleClick(item.label)}
             className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-all duration-200 ${
-              item.active
+              activeItem === item.label
                 ? 'bg-[#111] text-[#00f2ff] border-r-2 border-[#00f2ff]'
                 : 'text-gray-500 hover:text-gray-300'
             }`}
@@ -55,17 +64,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
       </nav>
 
       <div className="mt-auto space-y-6">
-        <button className="w-full py-3 bg-[#00f2ff] text-black rounded font-bold text-[11px] tracking-widest flex items-center justify-center space-x-2 hover:bg-[#00d8e4] active:scale-95 transition-all">
+        <button 
+          onClick={() => handleClick('CALIBRATE')}
+          className="w-full py-3 bg-[#00f2ff] text-black rounded font-bold text-[11px] tracking-widest flex items-center justify-center space-x-2 hover:bg-[#00d8e4] active:scale-95 transition-all"
+        >
           <Settings2 size={16} />
           <span>CALIBRATE SENSOR</span>
         </button>
 
         <div className="space-y-4 border-t border-[#1a1a1a] pt-6">
-          <button className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors">
+          <button 
+            onClick={() => handleClick('SUPPORT')}
+            className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors"
+          >
             <HelpCircle size={16} />
             <span className="text-[10px] font-bold tracking-widest">SUPPORT</span>
           </button>
-          <button className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors">
+          <button 
+            onClick={() => handleClick('LOGS')}
+            className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors"
+          >
             <Terminal size={16} />
             <span className="text-[10px] font-bold tracking-widest">LOGS</span>
           </button>
