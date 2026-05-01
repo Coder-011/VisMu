@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useVisMuStore } from '../store/useVisMuStore';
 import { Disc, RotateCcw, Camera, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -7,6 +7,7 @@ import { OrbitControls } from '@react-three/drei';
 import WebcamView from './WebcamView';
 import Flute3D from './Flute3D';
 import { audioEngine } from '../systems/audioEngine';
+import { getBackendStatus, hasBackend } from '../systems/api';
 
 interface DashboardProps {
   initialized: boolean;
@@ -16,12 +17,19 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
   const {
     handTrackingActive, confidenceScore, currentPitch, frequency,
     latency, holeStates, pressure, resonance, totalHolesClosed,
-    setPitchData, setHandTrackingActive, setConfidenceScore, setHoleStates, setMetrics,
+    backendConnected, useBackendAPI,
+    setBackendConnected, resetSession,
   } = useVisMuStore();
 
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const sessionId = useRef(`session_${Date.now()}`).current;
+
+  useEffect(() => {
+    if (!hasBackend) return;
+    getBackendStatus().then(setBackendConnected);
+  }, [setBackendConnected]);
 
   const handleRecord = async () => {
     if (recording) {
@@ -70,21 +78,16 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
 
   const handleReset = () => {
     audioEngine.playNote(null);
-    setPitchData('--', 0);
-    setHandTrackingActive(false);
-    setConfidenceScore(0);
-    setHoleStates([false, false, false, false, false, false]);
-    setMetrics(0, 0);
+    resetSession();
     if (recording) { mediaRecorderRef.current?.stop(); setRecording(false); }
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 flex flex-col gap-4 sm:gap-6" style={{ paddingBottom: '6rem' }}>
+    <div className="p-4 sm:p-6 lg:p-8 flex flex-col gap-4 sm:gap-6" style={{ paddingBottom: '2rem' }}>
 
-      {/* Top grid: video + 3D model + pitch/holes */}
       <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6">
 
-        {/* Video Feed - Made smaller to fit with 3D model */}
+        {/* Video Feed */}
         <div className="lg:col-span-5 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden relative">
           <div className="absolute top-3 left-4 z-10 flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${handTrackingActive ? 'bg-[#00f2ff] shadow-[0_0_8px_#00f2ff] animate-pulse' : 'bg-red-500'}`} />
@@ -98,26 +101,9 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
           </div>
           <div className="aspect-video bg-neutral-900 relative">
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none z-10" />
-            <WebcamView initialized={initialized} />
+            <WebcamView initialized={initialized} sessionId={sessionId} />
           </div>
-        </div>
-
-        {/* 3D Flute Visualization - Moved up to be on same level as video */}
-        <div className="lg:col-span-4 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
-          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-            <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
-            <p className="text-[9px] text-gray-600">Drag to rotate</p>
-          </div>
-          <div className="h-48 sm:h-64">
-            <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
-              <ambientLight intensity={0.4} />
-              <pointLight position={[5, 5, 5]} intensity={1} />
-              <pointLight position={[-5, -5, -5]} intensity={0.3} color="#00f2ff" />
-              <Flute3D holeStates={holeStates} />
-              <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
-            </Canvas>
-          </div>
-          <div className="p-3 flex space-x-8">
+          <div className="p-3 flex space-x-6">
             <div>
               <p className="text-[9px] text-gray-500 font-bold tracking-widest mb-0.5">LATENCY</p>
               <p className="text-xs text-white">{latency.toFixed(1)}ms</p>
@@ -133,12 +119,36 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
           </div>
         </div>
 
-        {/* Right Column - Pitch and Holes */}
-        <div className="lg:col-span-3 flex flex-col gap-4 sm:gap-6">
+        {/* 3D Flute */}
+        <div className="lg:col-span-4 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
+          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+            <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
+            <div className="flex items-center gap-3">
+              {useBackendAPI && (
+                <span className={`text-[9px] font-bold tracking-widest ${backendConnected ? 'text-green-500' : 'text-red-500'}`}>
+                  {backendConnected ? '● BACKEND' : '○ OFFLINE'}
+                </span>
+              )}
+              <p className="text-[9px] text-gray-600">Drag to rotate</p>
+            </div>
+          </div>
+          <div className="h-48 sm:h-56">
+            <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
+              <ambientLight intensity={0.4} />
+              <pointLight position={[5, 5, 5]} intensity={1} />
+              <pointLight position={[-5, -5, -5]} intensity={0.3} color="#00f2ff" />
+              <Flute3D holeStates={holeStates} />
+              <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
+            </Canvas>
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="lg:col-span-3 flex flex-col gap-4">
           {/* Current Pitch */}
           <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-6 flex flex-col items-center justify-center space-y-4">
             <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em]">CURRENT PITCH</p>
-            <h3 className="text-7xl sm:text-8xl font-thin text-white tracking-tighter">{currentPitch}</h3>
+            <h3 className="text-7xl font-thin text-white tracking-tighter">{currentPitch}</h3>
             <div className="w-full space-y-2 pt-2">
               <div className="flex justify-between text-[9px] text-gray-600 font-bold">
                 <span>{frequency > 0 ? `${frequency}Hz` : '---'}</span>
@@ -177,8 +187,8 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
         </div>
       </div>
 
-      {/* Control Bar — inline, not fixed */}
-      <div className="flex justify-center">
+      {/* Control Bar */}
+      <div className="flex justify-center pt-2">
         <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-2xl px-6 sm:px-10 py-3 sm:py-4 flex items-center space-x-6 sm:space-x-10 shadow-2xl">
           <ControlButton icon={Disc} label="RECORD" active={recording} onClick={handleRecord} />
           <ControlButton icon={Camera} label="SNAPSHOT" onClick={handleSnapshot} />

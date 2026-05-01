@@ -10,6 +10,7 @@ import {
   Unplug,
   X,
 } from 'lucide-react';
+import { useVisMuStore } from '../store/useVisMuStore';
 
 interface SidebarProps {
   onClose?: () => void;
@@ -18,6 +19,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', onItemClick }) => {
+  const { confidenceScore, latency, fps, cpuUsage, memoryUsage, backendConnected } = useVisMuStore();
   const menuItems = [
     { icon: BarChart3, label: 'PERFORMANCE', active: false },
     { icon: Music, label: 'NOTE MAPPING', active: false },
@@ -36,7 +38,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', 
     <div className="w-64 h-full bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col p-6">
       <div className="mb-10 flex items-start justify-between">
         <div>
-          <h2 className="text-[#00f2ff] text-xl font-bold tracking-wider mb-1">Control Deck</h2>
+          <h2 className="text-[#00f2ff] text-xl font-bold tracking-wider mb-1">
+          <span className="font-black italic">VisMu</span> Control Deck
+        </h2>
           <p className="text-gray-500 text-xs tracking-widest">Active Sync: 120 BPM</p>
         </div>
         {onClose && (
@@ -62,6 +66,39 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', 
           </button>
         ))}
       </nav>
+
+      {/* Real-Time Metrics */}
+      <div className="mt-6 p-4 bg-[#111] rounded-lg border border-[#1a1a1a]">
+        <p className="text-[10px] text-gray-500 font-bold tracking-widest mb-3">REAL-TIME METRICS</p>
+        <div className="space-y-2">
+          <div className="flex justify-between text-[9px]">
+            <span className="text-gray-400">CONFIDENCE</span>
+            <span className={`font-mono ${confidenceScore >= 0.99 ? 'text-[#00f2ff]' : 'text-white'}`}>{confidenceScore.toFixed(3)}</span>
+          </div>
+          <div className="flex justify-between text-[9px]">
+            <span className="text-gray-400">LATENCY</span>
+            <span className={`font-mono ${latency <= 4.2 ? 'text-[#00f2ff]' : 'text-yellow-400'}`}>{latency.toFixed(1)}ms</span>
+          </div>
+          <div className="flex justify-between text-[9px]">
+            <span className="text-gray-400">FPS</span>
+            <span className={`font-mono ${fps >= 60 ? 'text-[#00f2ff]' : 'text-yellow-400'}`}>{fps}</span>
+          </div>
+          <div className="flex justify-between text-[9px]">
+            <span className="text-gray-400">CPU</span>
+            <span className="font-mono text-white">{(cpuUsage * 100).toFixed(0)}%</span>
+          </div>
+          <div className="flex justify-between text-[9px]">
+            <span className="text-gray-400">MEMORY</span>
+            <span className="font-mono text-white">{(memoryUsage * 100).toFixed(0)}%</span>
+          </div>
+          {backendConnected && (
+            <div className="flex items-center space-x-2 pt-2 border-t border-[#1a1a1a]">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-[9px] text-gray-400">BACKEND CONNECTED</span>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="mt-auto space-y-6">
         <button 

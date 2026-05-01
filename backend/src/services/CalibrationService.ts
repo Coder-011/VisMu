@@ -5,7 +5,7 @@ export class CalibrationService {
     const db = getDB();
     const id = `profile_${Date.now()}`;
     await db.run(
-      'INSERT INTO calibration_profiles (id, user_id, thresholds) VALUES (?, ?, ?)',
+      'INSERT INTO calibration_profiles (id, user_id, hole_thresholds) VALUES (?, ?, ?)',
       id, userId, JSON.stringify(thresholds)
     );
     return id;
@@ -17,7 +17,7 @@ export class CalibrationService {
       'SELECT * FROM calibration_profiles WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
       userId
     );
-    return row ? { ...row, thresholds: JSON.parse(row.thresholds) } : null;
+    return row ? { ...row, thresholds: JSON.parse(row.hole_thresholds || '{}') } : null;
   }
 }
 

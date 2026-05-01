@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
-import { RefreshCcw, Settings, User, Menu, X } from 'lucide-react';
+import { RefreshCw, Settings, User, Menu } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import { audioEngine } from './systems/audioEngine';
+import { useVisMuStore } from './store/useVisMuStore';
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -44,6 +45,8 @@ const App: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarActiveItem, setSidebarActiveItem] = useState('PERFORMANCE');
   const [showSidebarMessage, setShowSidebarMessage] = useState('');
+  
+  const { useBackendAPI, setUseBackendAPI, backendConnected, setBackendConnected } = useVisMuStore();
 
   const handleSidebarItemClick = (label: string) => {
     setSidebarActiveItem(label);
@@ -79,7 +82,7 @@ const App: React.FC = () => {
                 START ENGINE
               </button>
               <p className="text-[10px] text-gray-700 uppercase tracking-widest">
-                Web Audio &amp; Camera Permission Required
+                Web Audio & Camera Permission Required
               </p>
             </div>
           </div>
@@ -135,7 +138,7 @@ const App: React.FC = () => {
 
             <div className="flex items-center space-x-4 sm:space-x-6 text-gray-500">
               <button className="hover:text-[#00f2ff] transition-colors" onClick={() => window.location.reload()}>
-                <RefreshCcw size={18} />
+                <RefreshCw size={18} />
               </button>
               <button className="hover:text-[#00f2ff] transition-colors relative" onClick={() => {
                 setShowSettings(!showSettings);
@@ -155,6 +158,27 @@ const App: React.FC = () => {
                         <input type="checkbox" defaultChecked className="toggle toggle-xs" />
                       </div>
                       <div className="pt-2 border-t border-[#1a1a1a]">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-[10px] text-gray-400">Use Backend API</span>
+                          <button
+                            onClick={() => {
+                              const newValue = !useBackendAPI;
+                              setUseBackendAPI(newValue);
+                              if (!newValue) setBackendConnected(false);
+                            }}
+                            className={`w-10 h-5 rounded-full transition-colors ${useBackendAPI ? 'bg-[#00f2ff]' : 'bg-gray-600'}`}
+                          >
+                            <div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${useBackendAPI ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          </button>
+                        </div>
+                        {useBackendAPI && (
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className={`w-2 h-2 rounded-full ${backendConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="text-[9px] text-gray-400">
+                              {backendConnected ? 'Connected to backend' : 'Backend offline'}
+                            </span>
+                          </div>
+                        )}
                         <button className="text-[10px] text-[#00f2ff] hover:underline">Reset All Settings</button>
                       </div>
                     </div>

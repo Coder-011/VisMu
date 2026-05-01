@@ -1,20 +1,24 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Cylinder } from '@react-three/drei';
+import { Cylinder, Text } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface Flute3DProps {
   holeStates: boolean[];
+  currentNote?: string;
+  confidence?: number;
 }
 
-const Flute3D: React.FC<Flute3DProps> = ({ holeStates }) => {
+const Flute3D: React.FC<Flute3DProps> = ({ holeStates, currentNote = '--' }) => {
   const groupRef = useRef<THREE.Group>(null);
+  const timeRef = useRef(0);
 
   useFrame((state) => {
+    timeRef.current = state.clock.getElapsedTime();
     if (groupRef.current) {
       // Gentle floating animation
-      groupRef.current.position.y = Math.sin(state.clock.getElapsedTime() * 0.5) * 0.1;
-      groupRef.current.rotation.z = Math.sin(state.clock.getElapsedTime() * 0.3) * 0.05;
+      groupRef.current.position.y = Math.sin(timeRef.current * 0.5) * 0.1;
+      groupRef.current.rotation.z = Math.sin(timeRef.current * 0.3) * 0.05;
     }
   });
 
@@ -24,8 +28,8 @@ const Flute3D: React.FC<Flute3DProps> = ({ holeStates }) => {
       <Cylinder args={[0.3, 0.3, 8, 32]} rotation={[0, 0, 0]}>
         <meshStandardMaterial 
           color="#3d2b1f" 
-          roughness={0.8} 
-          metalness={0.1} 
+          roughness={0.9} 
+          metalness={0.05} 
         />
       </Cylinder>
 
@@ -36,17 +40,17 @@ const Flute3D: React.FC<Flute3DProps> = ({ holeStates }) => {
         
         return (
           <group key={idx} position={[0, (idx - 2.5) * 0.8, 0.3]}>
-            {/* Hole base */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <circleGeometry args={[0.12, 32]} />
-              <meshStandardMaterial 
-                color={isActive ? "#00f2ff" : "#1a1a1a"}
-                emissive={isActive ? "#00f2ff" : "#000000"}
-                emissiveIntensity={isActive ? 1.5 : 0}
-                transparent
-                opacity={0.9}
-              />
-            </mesh>
+             {/* Hole base */}
+             <mesh rotation={[Math.PI / 2, 0, 0]}>
+               <circleGeometry args={[0.12, 32]} />
+               <meshStandardMaterial 
+                 color={isActive ? "#00f2ff" : "#1a1a1a"}
+                 emissive={isActive ? "#00f2ff" : "#000000"}
+                 emissiveIntensity={isActive ? 1.5 + Math.sin(timeRef.current * 3) * 0.3 : 0}
+                 transparent
+                 opacity={0.9}
+               />
+             </mesh>
             
             {/* Inner glow ring */}
             {isActive && (
@@ -85,13 +89,38 @@ const Flute3D: React.FC<Flute3DProps> = ({ holeStates }) => {
         );
       })}
 
-      {/* Bamboo Bindings (Threads) */}
-      {[-3.5, -2, 0, 2, 3.5].map((pos, idx) => (
-        <Cylinder key={idx} args={[0.31, 0.31, 0.1, 32]} position={[0, pos, 0]}>
-          <meshStandardMaterial color="#8b0000" />
-        </Cylinder>
-      ))}
-    </group>
+       {/* Bamboo Bindings (Threads) */}
+       {[-3.5, -2, 0, 2, 3.5].map((pos, idx) => (
+         <Cylinder key={idx} args={[0.31, 0.31, 0.1, 32]} position={[0, pos, 0]}>
+           <meshStandardMaterial color="#8b0000" />
+         </Cylinder>
+       ))}
+
+       {/* Current Note Display */}
+       <Text
+         position={[0, 3, 0]}
+         color="#00f2ff"
+         fontSize={0.6}
+         anchorX="center"
+         anchorY="middle"
+       >
+         {currentNote}
+       </Text>
+
+       {/* Hole Labels */}
+       {[0, 1, 2, 3, 4, 5].map((idx) => (
+         <Text
+           key={`label-${idx}`}
+           position={[0.4, (idx - 2.5) * 0.8, 0.3]}
+           color="#666"
+           fontSize={0.2}
+           anchorX="left"
+           anchorY="middle"
+         >
+           {`H${idx + 1}`}
+         </Text>
+       ))}
+     </group>
   );
 };
 
