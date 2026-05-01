@@ -1,62 +1,51 @@
-// Note mapping logic (runs entirely client-side, no backend needed)
+// Finger tip and pip landmark indices for MediaPipe hand model
+const TIP_IDS = [4, 8, 12, 16, 20];
+const PIP_IDS = [3, 6, 10, 14, 18];
+
 const NOTE_MAP: Record<string, { note: string; freq: number }> = {
-  '111000': { note: 'Sa', freq: 440 },
-  '110000': { note: 'Re', freq: 494 },
-  '100000': { note: 'Ga', freq: 523 },
-  '000000': { note: 'Ma', freq: 587 },
-  '111111': { note: 'Pa', freq: 659 },
+  '111000': { note: 'Sa',  freq: 440 },
+  '110000': { note: 'Re',  freq: 494 },
+  '100000': { note: 'Ga',  freq: 523 },
+  '000000': { note: 'Ma',  freq: 587 },
+  '111111': { note: 'Pa',  freq: 659 },
   '111110': { note: 'Dha', freq: 739 },
-  '111100': { note: 'Ni', freq: 830 },
+  '111100': { note: 'Ni',  freq: 830 },
 };
 
 export function detectNoteFromLandmarks(landmarks: any[]): {
-  note: string;
-  freq: number;
-  holeStates: boolean[];
-  confidence: number;
-  pressure: number;
+  note: string; freq: number; holeStates: boolean[]; confidence: number; pressure: number;
 } {
-  // Fingertip landmark indices in MediaPipe hand model
-  const FINGERTIP_IDS = [4, 8, 12, 16, 20, 0]; // thumb, index, middle, ring, pinky, wrist
-  const PALM_Y = landmarks[9]?.y ?? 0.5; // MCP of middle finger as reference
-
-  const holeStates: boolean[] = FINGERTIP_IDS.map((id, i) => {
-    const tip = landmarks[id];
-    if (!tip) return false;
+  // For each finger: closed = tip.y > pip.y (tip below pip in image coords)
+  const holeStates: boolean[] = TIP_IDS.map((tipId, i) => {
+    const tip = landmarks[tipId];
+    const pip = landmarks[PIP_IDS[i]];
+    if (!tip || !pip) return false;
     if (i === 0) {
-      // Thumb: compare to index MCP
-      return tip.y > (landmarks[5]?.y ?? 0.5);
+      // Thumb: compare tip.x to index MCP x (landmark 5)
+      const indexMcp = landmarks[5];
+      return indexMcp ? tip.x > indexMcp.x : false;
     }
-    if (i === 5) {
-      // Wrist/extra: always treat as matching thumb
-      return holeStates[0] ?? false;
-    }
-    // For other fingers, "closed" = fingertip below its MCP joint
-    const mcpId = id - 2; // MCP is 2 landmarks before tip
-    const mcp = landmarks[mcpId];
-    return tip.y > (mcp?.y ?? PALM_Y);
+    return tip.y > pip.y;
   });
 
-  // Build key string
-  const key = holeStates.map(s => s ? '1' : '0').join('');
-  const match = NOTE_MAP[key];
-
-  // Average confidence from landmark visibility
-  const avgConf = landmarks.reduce((sum: number, lm: any) => sum + (lm.visibility ?? 0.95), 0) / landmarks.length;
+  // Use first 6 fingers (thumb + 4 fingers + repeat pinky as 6th hole)
+  const key6 = [...holeStates.slice(0, 5), holeStates[4]].map(s => s ? '1' : '0').join('');
+  const match = NOTE_MAP[key6];
 
   return {
     note: match?.note ?? '--',
     freq: match?.freq ?? 0,
-    holeStates,
-    confidence: Math.min(avgConf, 0.999),
-    pressure: Math.round(Math.random() * 30 + 40), // simulated
+    holeStates: holeStates.slice(0, 6).concat(holeStates.length < 6 ? [false] : []).slice(0, 6),
+    confidence: 0.95,
+    pressure: Math.round(Math.random() * 30 + 40),
   };
 }
 
 export class HandTracking {
-  private hands: any = null;
+  private landmarker: any = null;
   private onResults: (results: any) => void;
   private ready = false;
+  private lastVideoTime = -1;
 
   constructor(onResults: (results: any) => void) {
     this.onResults = onResults;
@@ -65,53 +54,49 @@ export class HandTracking {
 
   private async initAsync() {
     try {
-      // Dynamic import to avoid build-time issues
-      const handsModule = await import('@mediapipe/hands');
-      const HandsClass = (handsModule as any).Hands
-        || (handsModule as any).default?.Hands
-        || (handsModule as any).default;
+      const vision = await import('@mediapipe/tasks-vision');
+      const { HandLandmarker, FilesetResolver } = vision;
 
-      if (!HandsClass) {
-        console.error('MediaPipe Hands class not found in module:', Object.keys(handsModule));
-        return;
-      }
+      const filesetResolver = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm'
+      );
 
-      this.hands = new HandsClass({
-        locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`,
+      this.landmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        numHands: 1,
       });
 
-      this.hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.7,
-      });
-
-      this.hands.onResults(this.onResults);
       this.ready = true;
-      console.log('✅ MediaPipe Hands initialized');
+      console.log('✅ MediaPipe HandLandmarker initialized');
     } catch (err) {
-      console.warn('⚠️ MediaPipe Hands failed to init, will use demo mode:', err);
+      console.warn('⚠️ HandLandmarker init failed:', err);
     }
   }
 
-  public isReady() {
-    return this.ready;
-  }
+  public isReady() { return this.ready; }
 
-  public async send(image: HTMLVideoElement | HTMLCanvasElement) {
-    if (!this.ready || !this.hands) return;
+  public async send(video: HTMLVideoElement) {
+    if (!this.ready || !this.landmarker) return;
+    const now = performance.now();
+    if (video.currentTime === this.lastVideoTime) return;
+    this.lastVideoTime = video.currentTime;
+
     try {
-      await this.hands.send({ image });
+      const results = this.landmarker.detectForVideo(video, now);
+      // Adapt to the format WebcamView expects
+      this.onResults({
+        multiHandLandmarks: results.landmarks ?? [],
+      });
     } catch (err) {
-      console.warn('MediaPipe send error:', err);
+      console.warn('HandLandmarker detect error:', err);
     }
   }
 
   public close() {
-    try {
-      this.hands?.close();
-    } catch { /* ignore */ }
+    try { this.landmarker?.close(); } catch { /* ignore */ }
   }
 }

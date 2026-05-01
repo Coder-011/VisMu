@@ -1,89 +1,80 @@
-import * as Tone from 'tone';
-
-// Note frequencies for the bansuri swaras
 const SWARA_FREQUENCIES: Record<string, number> = {
-  Sa: 440,
-  Re: 494,
-  Ga: 523,
-  Ma: 587,
-  Pa: 659,
-  Dha: 739,
-  Ni: 830,
+  Sa: 440, Re: 494, Ga: 523, Ma: 587, Pa: 659, Dha: 739, Ni: 830,
 };
 
 class AudioEngine {
-  private synth: Tone.PolySynth | null = null;
+  private ctx: AudioContext | null = null;
+  private oscillator: OscillatorNode | null = null;
+  private gainNode: GainNode | null = null;
   private currentNote: string | null = null;
   private initialized = false;
 
   public async initialize() {
     if (this.initialized) return;
-
     try {
-      await Tone.start();
+      this.ctx = new AudioContext();
+      await this.ctx.resume();
 
-      // Use a synthesizer that sounds flute-like (sine + slight detune)
-      this.synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'sine' },
-        envelope: {
-          attack: 0.05,
-          decay: 0.1,
-          sustain: 0.8,
-          release: 0.4,
-        },
-        volume: -8,
-      }).toDestination();
+      this.gainNode = this.ctx.createGain();
+      this.gainNode.gain.value = 0;
 
-      // Add reverb for ambiance
-      const reverb = new Tone.Reverb({ decay: 2, wet: 0.3 }).toDestination();
-      this.synth.connect(reverb);
+      // Slight reverb via convolver approximation using delay
+      const delay = this.ctx.createDelay(0.5);
+      delay.delayTime.value = 0.15;
+      const feedback = this.ctx.createGain();
+      feedback.gain.value = 0.25;
+      delay.connect(feedback);
+      feedback.connect(delay);
+      this.gainNode.connect(delay);
+      delay.connect(this.ctx.destination);
+      this.gainNode.connect(this.ctx.destination);
+
+      // Single persistent oscillator
+      this.oscillator = this.ctx.createOscillator();
+      this.oscillator.type = 'sine';
+      this.oscillator.frequency.value = 440;
+      this.oscillator.connect(this.gainNode);
+      this.oscillator.start();
 
       this.initialized = true;
       console.log('✅ Audio engine initialized');
     } catch (err) {
-      console.warn('⚠️ Audio engine failed to init:', err);
+      console.warn('⚠️ Audio engine failed:', err);
     }
   }
 
   public playNote(note: string | null) {
-    if (!this.initialized || !this.synth) return;
+    if (!this.initialized || !this.ctx || !this.oscillator || !this.gainNode) return;
     if (note === this.currentNote) return;
-    if (note === '--' || !note) {
-      // Stop current note
-      if (this.currentNote) {
-        const freq = SWARA_FREQUENCIES[this.currentNote];
-        if (freq) {
-          try { this.synth.triggerRelease(freq); } catch { /* ignore */ }
-        }
-      }
+
+    const now = this.ctx.currentTime;
+
+    if (!note || note === '--') {
+      // Fade out
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, now);
+      this.gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
       this.currentNote = null;
       return;
     }
 
-    // Release old note
-    if (this.currentNote) {
-      const oldFreq = SWARA_FREQUENCIES[this.currentNote];
-      if (oldFreq) {
-        try { this.synth.triggerRelease(oldFreq); } catch { /* ignore */ }
-      }
-    }
-
-    // Play new note
     const freq = SWARA_FREQUENCIES[note];
-    if (freq) {
-      try {
-        this.synth.triggerAttack(freq);
-      } catch (err) {
-        console.warn('Audio play error:', err);
-      }
-    }
+    if (!freq) return;
+
+    // Glide to new frequency
+    this.oscillator.frequency.cancelScheduledValues(now);
+    this.oscillator.frequency.setValueAtTime(this.oscillator.frequency.value, now);
+    this.oscillator.frequency.linearRampToValueAtTime(freq, now + 0.05);
+
+    // Fade in if was silent
+    this.gainNode.gain.cancelScheduledValues(now);
+    this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, now);
+    this.gainNode.gain.linearRampToValueAtTime(0.4, now + 0.05);
 
     this.currentNote = note;
   }
 
-  public isInitialized() {
-    return this.initialized;
-  }
+  public isInitialized() { return this.initialized; }
 }
 
 export const audioEngine = new AudioEngine();
