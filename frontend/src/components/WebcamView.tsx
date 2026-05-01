@@ -1,66 +1,64 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import Webcam from 'react-webcam';
-import { HandTracking } from '../systems/handTracking';
+import { HandTracking, detectNoteFromLandmarks } from '../systems/handTracking';
 import { useVisMuStore } from '../store/useVisMuStore';
-import axios from 'axios';
 import { audioEngine } from '../systems/audioEngine';
-import { config } from '../config';
 
 const WebcamView: React.FC = () => {
   const webcamRef = useRef<Webcam>(null);
-  const { setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics } = useVisMuStore();
   const handTrackingRef = useRef<HandTracking | null>(null);
+  const [camError, setCamError] = useState(false);
+  const {
+    setHandTrackingActive,
+    setConfidenceScore,
+    setPitchData,
+    setLatency,
+    setHoleStates,
+    setMetrics,
+  } = useVisMuStore();
 
-  const processResults = useCallback(async (results: any) => {
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      setHandTrackingActive(true);
-      const landmarks = results.multiHandLandmarks[0];
-      const confidence = results.multiHandWorldLandmarks?.[0]?.[0]?.visibility || 0.992; // Mock if not available
-      setConfidenceScore(confidence);
+  const processResults = useCallback(
+    (results: any) => {
+      const startTime = performance.now();
 
-      // Send landmarks to backend
-      try {
-        const response = await axios.post(`${config.apiUrl}/api/detect/landmarks`, {
-          landmarks,
-          timestamp: Date.now(),
-        });
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        setHandTrackingActive(true);
+        const landmarks = results.multiHandLandmarks[0];
 
-        const { holeState, currentNote, frequency, latency, pressure } = response.data;
-        
-        setPitchData(currentNote || '--', frequency);
-        setLatency(latency);
-        audioEngine.playNote(currentNote);
-        
-        const states = [
-          holeState.H1,
-          holeState.H2,
-          holeState.H3,
-          holeState.H4,
-          holeState.H5,
-          holeState.H6
-        ];
-        setHoleStates(states);
-        
-        // Calculate average pressure for display
-        const avgPressure = pressure.reduce((a: number, b: number) => a + b, 0) / 6;
-        setMetrics(Math.round(avgPressure), 88); // Resonance mock for now
-      } catch (err) {
-        console.error('Backend error:', err);
+        // All detection runs client-side — no backend needed
+        const detection = detectNoteFromLandmarks(landmarks);
+
+        setConfidenceScore(detection.confidence);
+        setPitchData(detection.note, detection.freq);
+        setHoleStates(detection.holeStates);
+        setMetrics(detection.pressure, 88);
+        audioEngine.playNote(detection.note);
+
+        const latency = performance.now() - startTime;
+        setLatency(parseFloat(latency.toFixed(1)));
+      } else {
+        setHandTrackingActive(false);
+        setConfidenceScore(0);
+        setPitchData('--', 0);
+        audioEngine.playNote(null);
       }
-    } else {
-      setHandTrackingActive(false);
-      setConfidenceScore(0);
-    }
-  }, [setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics]);
+    },
+    [setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics],
+  );
 
   useEffect(() => {
     handTrackingRef.current = new HandTracking(processResults);
 
     const interval = setInterval(async () => {
-      if (webcamRef.current && webcamRef.current.video && webcamRef.current.video.readyState === 4) {
-        await handTrackingRef.current?.send(webcamRef.current.video);
+      if (
+        webcamRef.current &&
+        webcamRef.current.video &&
+        webcamRef.current.video.readyState === 4 &&
+        handTrackingRef.current?.isReady()
+      ) {
+        await handTrackingRef.current.send(webcamRef.current.video);
       }
-    }, 50); // 20 FPS for processing to save CPU
+    }, 50);
 
     return () => {
       clearInterval(interval);
@@ -70,17 +68,20 @@ const WebcamView: React.FC = () => {
 
   return (
     <div className="relative w-full h-full">
-      <Webcam
-        ref={webcamRef}
-        mirrored
-        audio={false}
-        className="w-full h-full object-cover"
-        videoConstraints={{
-          width: 1280,
-          height: 720,
-          facingMode: "user"
-        }}
-      />
+      {camError ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <p className="text-gray-600 text-xs italic">Camera unavailable</p>
+        </div>
+      ) : (
+        <Webcam
+          ref={webcamRef}
+          mirrored
+          audio={false}
+          className="w-full h-full object-cover"
+          videoConstraints={{ width: 1280, height: 720, facingMode: 'user' }}
+          onUserMediaError={() => setCamError(true)}
+        />
+      )}
     </div>
   );
 };

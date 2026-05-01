@@ -1,75 +1,88 @@
 import * as Tone from 'tone';
 
+// Note frequencies for the bansuri swaras
+const SWARA_FREQUENCIES: Record<string, number> = {
+  Sa: 440,
+  Re: 494,
+  Ga: 523,
+  Ma: 587,
+  Pa: 659,
+  Dha: 739,
+  Ni: 830,
+};
+
 class AudioEngine {
-  private synth: Tone.Sampler | null = null;
+  private synth: Tone.PolySynth | null = null;
   private currentNote: string | null = null;
   private initialized = false;
 
   public async initialize() {
     if (this.initialized) return;
 
-    // In a real app, these would be URLs to high-quality samples
-    this.synth = new Tone.Sampler({
-      urls: {
-        Sa: "sa.wav",
-        Re: "re.wav",
-        Ga: "ga.wav",
-        Ma: "ma.wav",
-        Pa: "pa.wav",
-        Dha: "dha.wav",
-        Ni: "ni.wav",
-      },
-      baseUrl: "http://localhost:3000/audio/",
-      onload: () => {
-        console.log("Flute samples loaded");
-      },
-      onerror: (err) => {
-        console.warn("Could not load samples, falling back to synthesis", err);
-        this.setupFallbackSynth();
-      }
-    }).toDestination();
+    try {
+      await Tone.start();
 
-    await Tone.start();
-    this.initialized = true;
-  }
+      // Use a synthesizer that sounds flute-like (sine + slight detune)
+      this.synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' },
+        envelope: {
+          attack: 0.05,
+          decay: 0.1,
+          sustain: 0.8,
+          release: 0.4,
+        },
+        volume: -8,
+      }).toDestination();
 
-  private setupFallbackSynth() {
-    // A simple flute-like synth using sine waves and noise
-    this.synth = new Tone.Sampler({
-       urls: {
-         C4: "https://tonejs.github.io/audio/salamander/C4.mp3",
-       }
-    }).toDestination();
+      // Add reverb for ambiance
+      const reverb = new Tone.Reverb({ decay: 2, wet: 0.3 }).toDestination();
+      this.synth.connect(reverb);
+
+      this.initialized = true;
+      console.log('✅ Audio engine initialized');
+    } catch (err) {
+      console.warn('⚠️ Audio engine failed to init:', err);
+    }
   }
 
   public playNote(note: string | null) {
     if (!this.initialized || !this.synth) return;
-
     if (note === this.currentNote) return;
-
-    if (this.currentNote) {
-      this.synth.triggerRelease(this.currentNote);
+    if (note === '--' || !note) {
+      // Stop current note
+      if (this.currentNote) {
+        const freq = SWARA_FREQUENCIES[this.currentNote];
+        if (freq) {
+          try { this.synth.triggerRelease(freq); } catch { /* ignore */ }
+        }
+      }
+      this.currentNote = null;
+      return;
     }
 
-    if (note) {
-      // Map Sa, Re, etc. to frequencies or piano keys for the sampler
-      const noteMap: any = {
-        'Sa': 'C4',
-        'Re': 'D4',
-        'Ga': 'E4',
-        'Ma': 'F4',
-        'Pa': 'G4',
-        'Dha': 'A4',
-        'Ni': 'B4',
-      };
-      
-      const midiNote = noteMap[note];
-      if (midiNote) {
-        this.synth.triggerAttack(midiNote);
+    // Release old note
+    if (this.currentNote) {
+      const oldFreq = SWARA_FREQUENCIES[this.currentNote];
+      if (oldFreq) {
+        try { this.synth.triggerRelease(oldFreq); } catch { /* ignore */ }
+      }
+    }
+
+    // Play new note
+    const freq = SWARA_FREQUENCIES[note];
+    if (freq) {
+      try {
+        this.synth.triggerAttack(freq);
+      } catch (err) {
+        console.warn('Audio play error:', err);
       }
     }
 
     this.currentNote = note;
+  }
+
+  public isInitialized() {
+    return this.initialized;
   }
 }
 
