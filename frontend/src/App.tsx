@@ -1,6 +1,6 @@
 import React from 'react';
 import Sidebar from './components/Sidebar';
-import { RefreshCcw, Settings, User, Menu, X } from 'lucide-react';
+import { RefreshCcw, Settings, User, Menu } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import { audioEngine } from './systems/audioEngine';
 
