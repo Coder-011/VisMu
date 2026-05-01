@@ -1,0 +1,847 @@
+# VisMu Flute Detection Backend - Complete Build Instructions
+
+**Project:** VisMu - Real-time Flute Finger Detection & Audio Synthesis System
+**Frontend:** Ready-to-integrate UI with hand tracking visualization
+**Task:** Build a full-stack backend that powers the VisMu interface
+
+---
+
+## PROJECT OVERVIEW
+
+### What This App Does
+1. **Captures** video from user's webcam showing hands playing a flute
+2. **Detects** which of 6 fingers are pressing/lifting flute holes in real-time
+3. **Maps** finger positions to Indian classical flute notes (Sa, Re, Ga, Ma, Pa, Dha, Ni)
+4. **Synthesizes** corresponding flute audio in real-time using Web Audio API
+5. **Animates** a synchronized 3D virtual flute showing finger positions
+6. **Displays** confidence scores, latency metrics, and flute hole state visualization
+7. **Brands** entire interface with "VisMu" logo and professional styling
+
+### Key Metrics from UI
+- **Latency Target:** 4.2ms or lower
+- **Confidence Score:** 0.99+ (99% hand detection accuracy)
+- **Hand Tracking:** Real-time MediaPipe pose estimation
+- **Audio Latency:** Must be imperceptible (<50ms end-to-end)
+- **Visualization:** 6 flute holes shown as cyan/dark circles
+- **Active Sync:** 120 BPM Control Deck synchronization
+
+---
+
+## TECHNOLOGY STACK
+
+### Frontend (Already Provided)
+- **Framework:** React 18+
+- **3D Graphics:** Three.js for 3D flute visualization
+- **Hand Detection:** MediaPipe Holistic (or Hands)
+- **Audio:** Web Audio API for synthesis
+- **State Management:** React hooks (useState, useRef, useEffect)
+- **Styling:** Tailwind CSS + custom dark theme
+- **Real-time:** WebSocket support for optional server communication
+
+### Backend (What You're Building)
+**Choose ONE of these stacks:**
+
+#### Option A: Node.js + Express (RECOMMENDED - Fastest Integration)
+- **Runtime:** Node.js 18+
+- **Framework:** Express.js 4.18+
+- **ML Library:** TensorFlow.js or MediaPipe JS (for CPU-based detection if needed)
+- **Audio Processing:** Tone.js for advanced synthesis
+- **Database:** SQLite3 (local) or PostgreSQL (production)
+- **Real-time:** Socket.io for WebSocket support
+- **Containerization:** Docker for deployment
+
+#### Option B: Python + FastAPI (For Advanced ML)
+- **Framework:** FastAPI 0.100+
+- **ML:** MediaPipe Python + OpenCV for hand detection
+- **Audio:** librosa + scipy for audio synthesis
+- **Real-time:** Uvicorn ASGI server
+- **Async:** asyncio for concurrent processing
+- **Database:** SQLAlchemy + SQLite3/PostgreSQL
+- **Containerization:** Docker
+
+#### Option C: Node.js + TypeScript (For Type Safety)
+- Same as Option A but with full TypeScript support
+- **TypeScript:** 5.0+
+- **Type Definitions:** Strict mode enabled
+- All other dependencies same as Option A
+
+**RECOMMENDED:** Go with **Option A (Node.js + Express)** for fastest development and easiest frontend integration.
+
+---
+
+## ARCHITECTURE OVERVIEW
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    FRONTEND (React)                      │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ 1. Webcam Capture (getUserMedia)                │   │
+│  │ 2. MediaPipe Hand Detection (6 finger landmarks)│   │
+│  │ 3. Local Hole Detection Logic                   │   │
+│  │ 4. Real-time 3D Flute Animation                 │   │
+│  │ 5. Web Audio API Synthesis                      │   │
+│  │ 6. UI State & Visualization                     │   │
+│  └──────────────────────────────────────────────────┘   │
+│                    ↓ (Optional API calls)                │
+├─────────────────────────────────────────────────────────┤
+│                BACKEND (Node.js/Python)                  │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ 1. REST API Endpoints                           │   │
+│  │ 2. Hand Landmark Processing                     │   │
+│  │ 3. Note Mapping Engine                          │   │
+│  │ 4. Audio File Serving (prerecorded flute notes) │   │
+│  │ 5. Sensor Calibration API                       │   │
+│  │ 6. Session Management & Logging                 │   │
+│  │ 7. Performance Monitoring                       │   │
+│  └──────────────────────────────────────────────────┘   │
+│                    ↓                                      │
+├─────────────────────────────────────────────────────────┤
+│                DATABASE (SQLite/PostgreSQL)              │
+│  • User calibration data                                │
+│  • Performance metrics                                  │
+│  • Session history                                      │
+│  • Configuration presets                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## CORE BACKEND FEATURES
+
+### 1. Hand Landmark Processing
+**Input:** Array of 21 hand landmarks (x, y, z, confidence) from MediaPipe
+**Process:**
+- Extract fingertip positions (landmarks 4, 8, 12, 16, 20)
+- Calculate finger lift/press state based on Y-axis position relative to palm
+- Detect pressure via Z-axis depth values
+- Smooth landmark data using Kalman filter (optional but recommended)
+- Calculate confidence scores per finger
+
+**Output:**
+```javascript
+{
+  timestamp: 1234567890,
+  fingers: {
+    thumb: { lifted: false, confidence: 0.98, pressure: 75 },
+    indexFinger: { lifted: true, confidence: 0.99, pressure: 0 },
+    middleFinger: { lifted: true, confidence: 0.99, pressure: 0 },
+    ringFinger: { lifted: false, confidence: 0.97, pressure: 68 },
+    pinkyFinger: { lifted: false, confidence: 0.96, pressure: 72 },
+    extraFinger: { lifted: false, confidence: 0.95, pressure: 70 }
+  },
+  overallConfidence: 0.992,
+  latency: 4.2
+}
+```
+
+### 2. Flute Hole Mapping Logic
+**Flute Configuration:** Standard bansuri with 6 holes (H1-H6)
+
+**Hole Numbering (Top to Bottom):**
+- H1 = Top hole (closest to embouchure)
+- H2 = Second from top
+- H3 = Third from top
+- H4 = Fourth hole (middle)
+- H5 = Fifth hole
+- H6 = Bottom hole
+
+**Note Mapping Rules:**
+```
+Sa (440 Hz)  ← H1, H2, H3 closed (top 3) | H4, H5, H6 open
+Re (494 Hz)  ← H1, H2 closed (top 2) | H3, H4, H5, H6 open
+Ga (523 Hz)  ← H1 closed (top 1) | H2, H3, H4, H5, H6 open
+Ma (587 Hz)  ← H1 open (all holes open)
+Pa (659 Hz)  ← H1, H2, H3, H4, H5, H6 ALL CLOSED
+Dha (739 Hz) ← H1, H2, H3, H4, H5 closed | H6 open (5 holes closed)
+Ni (830 Hz)  ← H1, H2, H3, H4 closed | H5, H6 open (top 4 closed)
+```
+
+**Finger-to-Hole Mapping:**
+```javascript
+const fingerToHole = {
+  thumb: 'H1',           // Top hole
+  indexFinger: 'H2',     // Second hole
+  middleFinger: 'H3',    // Third hole
+  ringFinger: 'H4',      // Middle hole
+  pinkyFinger: 'H5',     // Fifth hole
+  extraFinger: 'H6'      // Bottom hole
+};
+
+// Note: "extraFinger" refers to the 6th detection point
+// (could be palm, wrist, or secondary digit tracking)
+```
+
+**Hole State Logic:**
+- **Closed:** Finger is lifted (Y-position above threshold) = hole is blocked
+- **Open:** Finger is NOT lifted = hole is open
+- **Threshold Tuning:** Calibrate Y-position threshold per user
+
+### 3. Note Synthesis Engine
+**Audio Source Strategy:**
+
+**Option A: Web Audio API (Browser-side - PREFERRED)**
+- Pre-load flute note samples (.wav/.mp3) for each note
+- Trigger sample playback on note detection change
+- Add crossfading between notes for smooth transitions
+- Implement ADSR envelope (Attack, Decay, Sustain, Release)
+
+**Option B: Server-side Audio Processing (Advanced)**
+- Generate waveforms on backend using tone synthesis
+- Stream audio via WebSocket or HTTP chunked responses
+- Process with reverb/effects for realistic flute timbre
+
+**Recommended:** Use **Option A** (pre-recorded samples) for lowest latency.
+
+**Audio Files Needed:**
+```
+/audio/flute/
+├── sa.wav        (440 Hz, 2-4 seconds, stereo, 16-bit)
+├── re.wav        (494 Hz)
+├── ga.wav        (523 Hz)
+├── ma.wav        (587 Hz)
+├── pa.wav        (659 Hz)
+├── dha.wav       (739 Hz)
+├── ni.wav        (830 Hz)
+└── silence.wav   (100ms quiet, for transitions)
+```
+
+**Audio Playback Rules:**
+1. Detect note change from finger state
+2. If new note ≠ previous note, crossfade (50ms fade out old, fade in new)
+3. If same note, continue playback
+4. Implement note sustain (hold until finger lifts)
+5. Add gentle envelope to prevent pops/clicks
+6. Store audio context in backend for streaming if needed
+
+### 4. Sensor Calibration System
+**Why Calibration Matters:**
+- Each user has different hand size, flute size, camera angle
+- Lighting conditions affect MediaPipe confidence
+- Need per-user Y-position thresholds for accurate hole detection
+
+**Calibration Workflow:**
+```javascript
+POST /api/calibrate/start
+// Response: Begin calibration session
+
+POST /api/calibrate/record-position
+// Input: landmark array, hole_index, action ("open" | "close")
+// Records reference positions for each hole/action pair
+
+POST /api/calibrate/generate-profile
+// Calculates optimal thresholds per hole
+// Stores in database under user session
+
+GET /api/calibrate/profile
+// Retrieves active calibration profile
+```
+
+**Calibration Data Structure:**
+```javascript
+{
+  userId: "user_123",
+  sessionId: "session_456",
+  calibrationDate: "2025-05-01T10:30:00Z",
+  holeThresholds: {
+    H1: { openY: 0.45, closeY: 0.65, sensitivity: 0.8 },
+    H2: { openY: 0.48, closeY: 0.68, sensitivity: 0.8 },
+    H3: { openY: 0.50, closeY: 0.70, sensitivity: 0.8 },
+    H4: { openY: 0.52, closeY: 0.72, sensitivity: 0.8 },
+    H5: { openY: 0.54, closeY: 0.74, sensitivity: 0.8 },
+    H6: { openY: 0.56, closeY: 0.76, sensitivity: 0.8 }
+  },
+  ambientLight: "bright",
+  cameraModel: "built-in-4k",
+  accuracy: 0.94
+}
+```
+
+### 5. API Endpoints (Required)
+
+#### Health & Status
+```
+GET /api/health
+Response: { status: "ok", timestamp, uptime }
+
+GET /api/status
+Response: { 
+  handTrackingActive: true, 
+  audioReady: true, 
+  latency: 4.2, 
+  systemLoad: 0.35 
+}
+```
+
+#### Hand Detection & Note Mapping
+```
+POST /api/detect/landmarks
+Input: {
+  landmarks: [{ x, y, z, confidence }, ...],
+  timestamp: 1234567890,
+  sessionId: "session_123"
+}
+Output: {
+  fingerState: { thumb: bool, index: bool, ... },
+  holeState: { H1: bool, H2: bool, ... },
+  currentNote: "Sa",
+  confidence: 0.992,
+  latency: 4.2,
+  pressure: [75, 0, 0, 68, 72, 70]
+}
+
+POST /api/detect/multi-frame
+Input: { frames: [landmarks_frame_1, landmarks_frame_2, ...] }
+Output: Batch detection results with smoothing applied
+```
+
+#### Note Playback
+```
+GET /api/audio/note/:note
+Query: ?format=wav&quality=high&duration=2000
+Response: WAV audio file stream
+Headers: Content-Type: audio/wav
+
+POST /api/audio/play
+Input: { note: "Sa", duration: 1500, volume: 0.8 }
+Response: { playbackId: "pb_123", duration: 1500, status: "playing" }
+
+POST /api/audio/stop
+Input: { playbackId: "pb_123" }
+Response: { status: "stopped", duration: 1234 }
+```
+
+#### Calibration
+```
+POST /api/calibrate/start
+Response: { calibrationSessionId: "cal_123", instructions: "..." }
+
+POST /api/calibrate/record-position
+Input: { 
+  calibrationSessionId: "cal_123",
+  landmarks: [...],
+  holeIndex: 0,
+  action: "open",
+  pressure: 0.95
+}
+Response: { recorded: true, dataPoints: 45 }
+
+POST /api/calibrate/generate-profile
+Input: { calibrationSessionId: "cal_123" }
+Output: calibration profile with thresholds
+
+GET /api/calibrate/profile
+Response: active user calibration profile
+```
+
+#### Performance Monitoring
+```
+GET /api/metrics/performance
+Query: ?timeWindow=1m|5m|15m
+Response: {
+  avgLatency: 4.2,
+  avgConfidence: 0.992,
+  fps: 60,
+  cpuUsage: 0.35,
+  memoryUsage: 0.42,
+  droppedFrames: 0,
+  audioUnderrun: false
+}
+
+POST /api/metrics/log
+Input: { 
+  eventType: "note_played",
+  note: "Sa",
+  latency: 4.2,
+  confidence: 0.992,
+  timestamp: 1234567890
+}
+Response: { recorded: true }
+
+GET /api/metrics/session/:sessionId
+Response: Full session analytics
+```
+
+#### Configuration
+```
+GET /api/config/defaults
+Response: {
+  calibrationMode: "auto",
+  audioFormat: "wav",
+  targetLatency: 4,
+  smoothing: "kalman",
+  pressureSensitivity: 0.8
+}
+
+PATCH /api/config/update
+Input: { key: "pressureSensitivity", value: 0.85 }
+Response: { updated: true, config: {...} }
+```
+
+---
+
+## DATABASE SCHEMA (SQLite Example)
+
+```sql
+-- Users & Sessions
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  lastActiveAt DATETIME,
+  deviceInfo TEXT
+);
+
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  startTime DATETIME DEFAULT CURRENT_TIMESTAMP,
+  endTime DATETIME,
+  noteCount INTEGER DEFAULT 0,
+  accuracy REAL DEFAULT 0.0,
+  FOREIGN KEY(userId) REFERENCES users(id)
+);
+
+-- Calibration Data
+CREATE TABLE calibrationProfiles (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  sessionId TEXT,
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  holeThresholds TEXT, -- JSON string
+  ambientLight TEXT,
+  cameraModel TEXT,
+  accuracy REAL,
+  FOREIGN KEY(userId) REFERENCES users(id),
+  FOREIGN KEY(sessionId) REFERENCES sessions(id)
+);
+
+-- Performance Metrics
+CREATE TABLE detectionMetrics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sessionId TEXT NOT NULL,
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  frameLatency REAL,
+  confidence REAL,
+  detectedNote TEXT,
+  fingerState TEXT, -- JSON: { thumb: bool, ... }
+  holeState TEXT,   -- JSON: { H1: bool, ... }
+  FOREIGN KEY(sessionId) REFERENCES sessions(id)
+);
+
+CREATE TABLE audioEvents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sessionId TEXT NOT NULL,
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  note TEXT,
+  startTime REAL,
+  duration REAL,
+  confidence REAL,
+  pressure REAL,
+  FOREIGN KEY(sessionId) REFERENCES sessions(id)
+);
+
+-- Configuration
+CREATE TABLE userPreferences (
+  userId TEXT PRIMARY KEY,
+  pressureSensitivity REAL DEFAULT 0.8,
+  calibrationMode TEXT DEFAULT 'auto',
+  audioFormat TEXT DEFAULT 'wav',
+  smoothingAlgorithm TEXT DEFAULT 'kalman',
+  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(userId) REFERENCES users(id)
+);
+```
+
+---
+
+## IMPLEMENTATION SEQUENCE (Build Order)
+
+### Phase 1: Core API Setup (Days 1-2)
+1. [ ] Initialize Node.js/Express project with TypeScript
+2. [ ] Set up project structure:
+   ```
+   /src
+   ├── /api
+   │   ├── routes.ts
+   │   ├── middleware.ts
+   │   └── handlers/
+   │       ├── detection.ts
+   │       ├── audio.ts
+   │       ├── calibration.ts
+   │       └── metrics.ts
+   ├── /models
+   │   ├── Landmark.ts
+   │   ├── CalibrationProfile.ts
+   │   └── DetectionResult.ts
+   ├── /services
+   │   ├── HandDetectionService.ts
+   │   ├── NoteMappingService.ts
+   │   ├── AudioService.ts
+   │   ├── CalibrationService.ts
+   │   └── MetricsService.ts
+   ├── /database
+   │   ├── db.ts
+   │   └── migrations/
+   ├── /utils
+   │   ├── landmarkProcessing.ts
+   │   ├── filtering.ts
+   │   └── validation.ts
+   ├── app.ts
+   └── server.ts
+   ```
+3. [ ] Install dependencies (express, cors, body-parser, sqlite3, dotenv, etc.)
+4. [ ] Set up CORS for frontend integration
+5. [ ] Create health check endpoint
+
+### Phase 2: Landmark Processing (Days 2-3)
+1. [ ] Create landmark validation utilities
+2. [ ] Implement confidence score filtering
+3. [ ] Build finger state detection (lifted vs. pressed)
+4. [ ] Implement pressure calculation from Z-axis
+5. [ ] Add Kalman filter for landmark smoothing (optional, for ~50ms smoothing)
+6. [ ] Create POST /api/detect/landmarks endpoint
+7. [ ] Test with sample landmark data
+
+### Phase 3: Note Mapping Engine (Days 3-4)
+1. [ ] Define note-to-hole mapping constants
+2. [ ] Implement hole state detection from finger positions
+3. [ ] Build note determination logic (which note from hole states)
+4. [ ] Handle edge cases (partial presses, rapid transitions)
+5. [ ] Implement note change detection (prevents duplicate triggers)
+6. [ ] Create NoteMappingService class
+7. [ ] Add unit tests for all note mappings
+
+### Phase 4: Audio Management (Days 4-5)
+1. [ ] Acquire or create high-quality flute note audio files
+   - Record samples from real flute or use synthesized samples
+   - Ensure consistent volume and quality across all 7 notes
+   - Format: WAV, 44.1kHz, 16-bit, stereo, 2-4 second duration
+2. [ ] Set up /audio directory and asset serving
+3. [ ] Create GET /api/audio/note/:note endpoint
+4. [ ] Implement audio metadata API (duration, format, etc.)
+5. [ ] Add optional caching headers for performance
+6. [ ] Test audio playback timing
+
+### Phase 5: Calibration System (Days 5-6)
+1. [ ] Design calibration workflow UI prompts (backend will provide guidance)
+2. [ ] Implement calibration session management
+3. [ ] Build threshold calculation algorithm
+4. [ ] Create calibration data storage (database)
+5. [ ] Implement per-user profile loading
+6. [ ] Build POST /api/calibrate endpoints
+7. [ ] Add calibration validation logic
+
+### Phase 6: Performance Monitoring (Days 6-7)
+1. [ ] Create metrics collection middleware
+2. [ ] Implement per-frame latency tracking
+3. [ ] Build confidence score aggregation
+4. [ ] Create GET /api/metrics endpoints
+5. [ ] Add system load monitoring
+6. [ ] Implement session logging to database
+7. [ ] Create analytics dashboard endpoints
+
+### Phase 7: Testing & Optimization (Days 7-8)
+1. [ ] Unit tests for all services
+2. [ ] Integration tests for API endpoints
+3. [ ] Load testing (target: 60 FPS with <5ms latency)
+4. [ ] Frontend integration testing
+5. [ ] Performance profiling and optimization
+6. [ ] Error handling and edge cases
+7. [ ] Documentation for frontend developers
+
+### Phase 8: Deployment & Integration (Days 8+)
+1. [ ] Docker containerization
+2. [ ] Environment configuration (dev, staging, production)
+3. [ ] Database migrations
+4. [ ] API documentation (Swagger/OpenAPI)
+5. [ ] Frontend integration guide
+6. [ ] Monitoring and logging setup
+
+---
+
+## CRITICAL REQUIREMENTS
+
+### Latency Targets
+- **End-to-End:** <50ms (from fingertip movement to audio playback + visual update)
+- **Landmark Processing:** <5ms per frame
+- **Note Detection:** <2ms
+- **Audio Playback:** Immediate (pre-buffered)
+- **Visualization Sync:** <16ms (60 FPS = 16.7ms frames)
+
+### Code Quality
+- **Language:** TypeScript (strongly recommended) or JavaScript ES6+
+- **Error Handling:** Comprehensive try-catch, input validation
+- **Logging:** Winston or Bunyan for structured logs
+- **Comments:** Clear comments for complex algorithms
+- **Code Style:** ESLint + Prettier for consistency
+
+### Security
+- **Input Validation:** Validate all landmark data (NaN, out of range, etc.)
+- **CORS:** Allow only frontend origin
+- **Rate Limiting:** Implement to prevent abuse
+- **Error Messages:** Never expose internal system details
+- **Session Tokens:** Use for multi-user scenarios
+
+### Testing
+- **Unit Tests:** Minimum 80% coverage on core services
+- **Integration Tests:** All API endpoints
+- **Load Tests:** Simulate 60 FPS input stream
+- **Audio Tests:** Verify sample playback timing
+
+---
+
+## LANDMARK DATA FORMAT
+
+### Input Structure (from MediaPipe Holistic)
+```javascript
+// 21 hand landmarks per hand
+landmarks = [
+  { x: 0.5, y: 0.3, z: 0.1, confidence: 0.99 },  // 0: Wrist
+  { x: 0.52, y: 0.25, z: 0.12, confidence: 0.98 }, // 1: Thumb CMC
+  { x: 0.54, y: 0.20, z: 0.15, confidence: 0.99 }, // 2: Thumb MCP
+  { x: 0.56, y: 0.15, z: 0.18, confidence: 0.99 }, // 3: Thumb IP
+  { x: 0.58, y: 0.10, z: 0.20, confidence: 0.99 }, // 4: Thumb TIP (fingertip)
+  // ... (5-7: Index finger, 9-12: Middle, 13-16: Ring, 17-20: Pinky)
+  // For flute detection, focus on fingertip landmarks: 4, 8, 12, 16, 20
+];
+```
+
+### Y-Axis Interpretation for Hole Detection
+```
+Y = 0.0 (top of image, finger fully lifted)
+Y = 0.5 (middle, neutral position)
+Y = 1.0 (bottom of image, finger pressed down)
+
+Convention: Lifted = Y < threshold (hole closed)
+            Pressed = Y >= threshold (hole open)
+```
+
+### Confidence Filtering
+- Reject landmarks with confidence < 0.7
+- Flag warnings if overall hand confidence < 0.85
+- Use previous frame data if confidence drop is sudden
+
+---
+
+## FRONTEND INTEGRATION CHECKLIST
+
+The frontend (React + VisMu UI) will:
+1. **Capture webcam** via getUserMedia API
+2. **Run MediaPipe** to extract landmarks in real-time
+3. **Send landmarks** to backend via `/api/detect/landmarks` OR process locally
+4. **Receive note mapping** from backend
+5. **Trigger audio** based on note change
+6. **Update 3D visualization** with finger positions
+7. **Display confidence, latency, hole states** from backend metrics
+8. **Call calibration endpoints** during setup
+
+**Backend must be ready to:**
+- Accept landmark arrays in POST requests
+- Return immediate note detection results
+- Serve audio files on demand
+- Provide real-time metrics
+- Handle concurrent requests from multiple users
+
+---
+
+## DEPLOYMENT & PRODUCTION CONSIDERATIONS
+
+### Server Requirements
+- **CPU:** Minimum 2 cores (4+ recommended)
+- **RAM:** 2GB minimum (4GB+ for production with multiple users)
+- **Network:** 10 Mbps+ for audio streaming
+- **Latency:** <20ms to nearest edge server
+
+### Hosting Options
+1. **Heroku** (easiest for quick deployment)
+2. **AWS** (EC2, Lambda, or AppSync for serverless)
+3. **DigitalOcean** (affordable VPS)
+4. **Google Cloud Run** (containerized, auto-scaling)
+5. **Self-hosted** (Raspberry Pi, Local server for privacy)
+
+### Docker Deployment
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### Environment Variables
+```
+NODE_ENV=production
+PORT=3000
+FRONTEND_URL=https://yourdomain.com
+DATABASE_URL=sqlite:///data/vismu.db
+AUDIO_FORMAT=wav
+TARGET_LATENCY=4
+LOG_LEVEL=info
+ENABLE_METRICS=true
+```
+
+---
+
+## TESTING STRATEGY
+
+### Unit Tests (Jest)
+```javascript
+// Example: Test note mapping
+test('Sa note requires top 3 holes closed', () => {
+  const holeState = { H1: true, H2: true, H3: true, H4: false, H5: false, H6: false };
+  expect(detectNote(holeState)).toBe('Sa');
+});
+
+test('Invalid hole state returns null', () => {
+  const holeState = null;
+  expect(detectNote(holeState)).toBeNull();
+});
+```
+
+### Integration Tests
+```javascript
+// Test API endpoint
+test('POST /api/detect/landmarks returns correct note', async () => {
+  const landmarks = [/* sample data */];
+  const res = await request(app)
+    .post('/api/detect/landmarks')
+    .send({ landmarks });
+  
+  expect(res.status).toBe(200);
+  expect(res.body.currentNote).toBe('Sa');
+  expect(res.body.latency).toBeLessThan(5);
+});
+```
+
+### Load Testing
+```bash
+# Use Apache Bench or k6
+ab -n 10000 -c 100 http://localhost:3000/api/health
+
+# k6 load test (60 FPS = 16.7ms frames)
+for i in {1..3600}; do
+  curl -X POST http://localhost:3000/api/detect/landmarks \
+    -H "Content-Type: application/json" \
+    -d @landmarks.json
+  sleep 0.0167  # 60 FPS = 16.7ms
+done
+```
+
+---
+
+## DOCUMENTATION FOR DEVELOPERS
+
+### README.md (Backend)
+```markdown
+# VisMu Backend
+
+Real-time flute finger detection and audio synthesis system.
+
+## Setup
+1. `npm install`
+2. `npm run build`
+3. `npm start`
+
+## API Documentation
+See `/docs/API.md`
+
+## Architecture
+See `/docs/ARCHITECTURE.md`
+
+## Development
+`npm run dev` (with hot reload)
+```
+
+### API Documentation (Swagger)
+Generate with `swagger-jsdoc` or similar tool:
+```javascript
+/**
+ * @swagger
+ * /api/detect/landmarks:
+ *   post:
+ *     summary: Detect note from hand landmarks
+ *     parameters:
+ *       - in: body
+ *         name: body
+ *         schema:
+ *           $ref: '#/definitions/LandmarkInput'
+ *     responses:
+ *       200:
+ *         schema:
+ *           $ref: '#/definitions/DetectionResult'
+ */
+```
+
+---
+
+## TROUBLESHOOTING GUIDE
+
+### High Latency (>5ms)
+- Profile code with Node profiler
+- Check database query performance
+- Verify no blocking operations in main thread
+- Optimize landmark filtering algorithms
+
+### Inconsistent Note Detection
+- Review calibration profile accuracy
+- Check MediaPipe confidence scores
+- Verify landmark smoothing is working
+- Add more calibration data points
+
+### Audio Playback Issues
+- Verify audio files are properly formatted
+- Check Web Audio API initialization
+- Review audio buffer sizes
+- Test with different browsers
+
+### Database Performance
+- Add indexes on frequently queried columns
+- Implement connection pooling
+- Archive old metrics data
+- Consider pagination for large result sets
+
+---
+
+## SUCCESS CRITERIA
+
+✅ Backend successfully built when:
+1. [ ] All API endpoints respond within <5ms (excluding I/O)
+2. [ ] Note detection accuracy >95% on test data
+3. [ ] Hand detection latency <4.2ms per frame
+4. [ ] Audio playback starts within <50ms of note change
+5. [ ] Calibration system achieves >94% accuracy per user
+6. [ ] Database stores metrics without performance degradation
+7. [ ] Frontend integrates without code changes
+8. [ ] System handles 10+ concurrent users (load test passes)
+9. [ ] All unit and integration tests pass
+10. [ ] Production deployment runs stable for 1+ hour under load
+
+---
+
+## NEXT STEPS
+
+1. **Choose your tech stack** (Node.js recommended)
+2. **Set up development environment**
+3. **Generate this project structure**
+4. **Follow Phase 1-8 implementation sequence**
+5. **Integrate with provided frontend React component**
+6. **Deploy and test end-to-end**
+7. **Celebrate! 🎉**
+
+---
+
+## SUPPORT & REFERENCES
+
+- **MediaPipe Documentation:** https://developers.google.com/mediapipe/solutions/vision/hand_landmarker
+- **Web Audio API:** https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API
+- **Three.js Documentation:** https://threejs.org/docs/
+- **Express.js Guide:** https://expressjs.com/
+- **FastAPI Documentation:** https://fastapi.tiangolo.com/
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** May 1, 2025
+**Ready for:** Claude Code, Cursor, or any agentic AI coding tool

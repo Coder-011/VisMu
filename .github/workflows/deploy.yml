@@ -1,0 +1,68 @@
+name: Build and Deploy VisMu
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install
+          npm run build
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Download MediaPipe Assets
+        run: |
+          mkdir -p frontend/dist/mediapipe
+          curl -L "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" -o frontend/dist/mediapipe/hand_landmarker.task
+          curl -L "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm/vision_wasm_internal.js" -o frontend/dist/mediapipe/vision_wasm_internal.js
+          curl -L "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm/vision_wasm_internal.wasm" -o frontend/dist/mediapipe/vision_wasm_internal.wasm
+          curl -L "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm/vision_wasm_internal_simd.js" -o frontend/dist/mediapipe/vision_wasm_internal_simd.js
+          curl -L "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm/vision_wasm_internal_simd.wasm" -o frontend/dist/mediapipe/vision_wasm_internal_simd.wasm
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './frontend/dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
