@@ -45,6 +45,8 @@ jobs:
         run: |
           cd frontend
           npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Download MediaPipe Assets
         run: |

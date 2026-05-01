@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Cylinder, MeshWobbleMaterial } from '@react-three/drei';
+import { Cylinder } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface Flute3DProps {

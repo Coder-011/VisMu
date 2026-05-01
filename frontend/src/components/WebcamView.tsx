@@ -4,6 +4,7 @@ import { HandTracking } from '../systems/handTracking';
 import { useVisMuStore } from '../store/useVisMuStore';
 import axios from 'axios';
 import { audioEngine } from '../systems/audioEngine';
+import { config } from '../config';
 
 const WebcamView: React.FC = () => {
   const webcamRef = useRef<Webcam>(null);
@@ -19,12 +20,12 @@ const WebcamView: React.FC = () => {
 
       // Send landmarks to backend
       try {
-        const response = await axios.post('http://localhost:3000/api/detect/landmarks', {
+        const response = await axios.post(`${config.apiUrl}/api/detect/landmarks`, {
           landmarks,
           timestamp: Date.now(),
         });
 
-        const { holeState, currentNote, frequency, latency, pressure } = response.body || response.data;
+        const { holeState, currentNote, frequency, latency, pressure } = response.data;
         
         setPitchData(currentNote || '--', frequency);
         setLatency(latency);

@@ -1,13 +1,15 @@
-import { Hands, Results } from '@mediapipe/hands';
+import * as HandsNS from '@mediapipe/hands';
+// @ts-ignore
+const Hands = (HandsNS as any).Hands || (HandsNS as any).default?.Hands || HandsNS;
 
 export class HandTracking {
-  private hands: Hands;
-  private onResults: (results: Results) => void;
+  private hands: any;
+  private onResults: (results: any) => void;
 
-  constructor(onResults: (results: Results) => void) {
+  constructor(onResults: (results: any) => void) {
     this.onResults = onResults;
     this.hands = new Hands({
-      locateFile: (file) => {
+      locateFile: (file: string) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
       },
     });

@@ -1,7 +1,6 @@
 import React from 'react';
 import { useVisMuStore } from '../store/useVisMuStore';
 import { 
-  Circle, 
   Disc, 
   RotateCcw, 
   Camera, 
@@ -15,7 +14,6 @@ const Dashboard: React.FC = () => {
     handTrackingActive, 
     confidenceScore, 
     currentPitch, 
-    frequency,
     latency,
     holeStates,
     pressure,
