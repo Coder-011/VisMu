@@ -1,15 +1,5 @@
 import React from 'react';
-import {
-  BarChart3,
-  Music,
-  Eye,
-  Speaker,
-  Settings2,
-  HelpCircle,
-  Terminal,
-  Unplug,
-  X,
-} from 'lucide-react';
+import { BarChart3, Music, Eye, Speaker, Settings2, HelpCircle, Terminal, Unplug, X } from 'lucide-react';
 import { useVisMuStore } from '../store/useVisMuStore';
 
 interface SidebarProps {
@@ -19,28 +9,23 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', onItemClick }) => {
-  const { confidenceScore, latency, fps, cpuUsage, memoryUsage, backendConnected } = useVisMuStore();
-  const menuItems = [
-    { icon: BarChart3, label: 'PERFORMANCE', active: false },
-    { icon: Music, label: 'NOTE MAPPING', active: false },
-    { icon: Eye, label: 'VISUALIZER', active: false },
-    { icon: Speaker, label: 'AUDIO IO', active: false },
-    { icon: Unplug, label: 'MIDI', active: false },
-  ];
+  const { confidenceScore, latency } = useVisMuStore();
 
-  const handleClick = (label: string) => {
-    if (onItemClick) {
-      onItemClick(label);
-    }
-  };
+  const menuItems = [
+    { icon: BarChart3, label: 'PERFORMANCE' },
+    { icon: Music, label: 'NOTE MAPPING' },
+    { icon: Eye, label: 'VISUALIZER' },
+    { icon: Speaker, label: 'AUDIO IO' },
+    { icon: Unplug, label: 'MIDI' },
+  ];
 
   return (
     <div className="w-64 h-full bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col p-6">
       <div className="mb-10 flex items-start justify-between">
         <div>
           <h2 className="text-[#00f2ff] text-xl font-bold tracking-wider mb-1">
-          <span className="font-black italic">VisMu</span> Control Deck
-        </h2>
+            <span className="font-black italic">VisMu</span> Control Deck
+          </h2>
           <p className="text-gray-500 text-xs tracking-widest">Active Sync: 120 BPM</p>
         </div>
         {onClose && (
@@ -54,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', 
         {menuItems.map((item) => (
           <button
             key={item.label}
-            onClick={() => handleClick(item.label)}
+            onClick={() => onItemClick?.(item.label)}
             className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-all duration-200 ${
               activeItem === item.label
                 ? 'bg-[#111] text-[#00f2ff] border-r-2 border-[#00f2ff]'
@@ -73,36 +58,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', 
         <div className="space-y-2">
           <div className="flex justify-between text-[9px]">
             <span className="text-gray-400">CONFIDENCE</span>
-            <span className={`font-mono ${confidenceScore >= 0.99 ? 'text-[#00f2ff]' : 'text-white'}`}>{confidenceScore.toFixed(3)}</span>
+            <span className={`font-mono ${confidenceScore >= 0.9 ? 'text-[#00f2ff]' : 'text-white'}`}>
+              {confidenceScore.toFixed(3)}
+            </span>
           </div>
           <div className="flex justify-between text-[9px]">
             <span className="text-gray-400">LATENCY</span>
-            <span className={`font-mono ${latency <= 4.2 ? 'text-[#00f2ff]' : 'text-yellow-400'}`}>{latency.toFixed(1)}ms</span>
+            <span className={`font-mono ${latency <= 10 ? 'text-[#00f2ff]' : 'text-yellow-400'}`}>
+              {latency.toFixed(1)}ms
+            </span>
           </div>
           <div className="flex justify-between text-[9px]">
-            <span className="text-gray-400">FPS</span>
-            <span className={`font-mono ${fps >= 60 ? 'text-[#00f2ff]' : 'text-yellow-400'}`}>{fps}</span>
+            <span className="text-gray-400">ENGINE</span>
+            <span className="font-mono text-[#00f2ff]">CLIENT</span>
           </div>
-          <div className="flex justify-between text-[9px]">
-            <span className="text-gray-400">CPU</span>
-            <span className="font-mono text-white">{(cpuUsage * 100).toFixed(0)}%</span>
-          </div>
-          <div className="flex justify-between text-[9px]">
-            <span className="text-gray-400">MEMORY</span>
-            <span className="font-mono text-white">{(memoryUsage * 100).toFixed(0)}%</span>
-          </div>
-          {backendConnected && (
-            <div className="flex items-center space-x-2 pt-2 border-t border-[#1a1a1a]">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-[9px] text-gray-400">BACKEND CONNECTED</span>
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="mt-auto space-y-6">
-        <button 
-          onClick={() => handleClick('CALIBRATE')}
+      <div className="mt-6 space-y-6">
+        <button
+          onClick={() => onItemClick?.('CALIBRATE')}
           className="w-full py-3 bg-[#00f2ff] text-black rounded font-bold text-[11px] tracking-widest flex items-center justify-center space-x-2 hover:bg-[#00d8e4] active:scale-95 transition-all"
         >
           <Settings2 size={16} />
@@ -110,17 +85,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, activeItem = 'PERFORMANCE', 
         </button>
 
         <div className="space-y-4 border-t border-[#1a1a1a] pt-6">
-          <button 
-            onClick={() => handleClick('SUPPORT')}
-            className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors"
-          >
+          <button onClick={() => onItemClick?.('SUPPORT')} className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors">
             <HelpCircle size={16} />
             <span className="text-[10px] font-bold tracking-widest">SUPPORT</span>
           </button>
-          <button 
-            onClick={() => handleClick('LOGS')}
-            className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors"
-          >
+          <button onClick={() => onItemClick?.('LOGS')} className="flex items-center space-x-3 text-gray-600 hover:text-gray-400 transition-colors">
             <Terminal size={16} />
             <span className="text-[10px] font-bold tracking-widest">LOGS</span>
           </button>

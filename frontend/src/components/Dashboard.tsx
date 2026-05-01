@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useVisMuStore } from '../store/useVisMuStore';
 import { Disc, RotateCcw, Camera, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -7,7 +7,7 @@ import { OrbitControls } from '@react-three/drei';
 import WebcamView from './WebcamView';
 import Flute3D from './Flute3D';
 import { audioEngine } from '../systems/audioEngine';
-import { getBackendStatus, hasBackend } from '../systems/api';
+import { clearSessionMetrics, getPerformanceSummary } from '../systems/api';
 
 interface DashboardProps {
   initialized: boolean;
@@ -16,20 +16,14 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
   const {
     handTrackingActive, confidenceScore, currentPitch, frequency,
-    latency, holeStates, pressure, resonance, totalHolesClosed,
-    backendConnected, useBackendAPI,
-    setBackendConnected, resetSession,
+    latency, holeStates, pressure, resonance, totalHolesClosed, sessionNoteCount,
+    resetSession,
   } = useVisMuStore();
 
   const [recording, setRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const sessionId = useRef(`session_${Date.now()}`).current;
-
-  useEffect(() => {
-    if (!hasBackend) return;
-    getBackendStatus().then(setBackendConnected);
-  }, [setBackendConnected]);
+  const summary = getPerformanceSummary();
 
   const handleRecord = async () => {
     if (recording) {
@@ -79,6 +73,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
   const handleReset = () => {
     audioEngine.playNote(null);
     resetSession();
+    clearSessionMetrics();
     if (recording) { mediaRecorderRef.current?.stop(); setRecording(false); }
   };
 
@@ -101,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
           </div>
           <div className="aspect-video bg-neutral-900 relative">
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none z-10" />
-            <WebcamView initialized={initialized} sessionId={sessionId} />
+            <WebcamView initialized={initialized} />
           </div>
           <div className="p-3 flex space-x-6">
             <div>
@@ -123,21 +118,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
         <div className="lg:col-span-4 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
           <div className="px-5 pt-4 pb-2 flex items-center justify-between">
             <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
-            <div className="flex items-center gap-3">
-              {useBackendAPI && (
-                <span className={`text-[9px] font-bold tracking-widest ${backendConnected ? 'text-green-500' : 'text-red-500'}`}>
-                  {backendConnected ? '● BACKEND' : '○ OFFLINE'}
-                </span>
-              )}
-              <p className="text-[9px] text-gray-600">Drag to rotate</p>
-            </div>
+            <p className="text-[9px] text-gray-600">Drag to rotate</p>
           </div>
           <div className="h-48 sm:h-56">
             <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
               <ambientLight intensity={0.4} />
               <pointLight position={[5, 5, 5]} intensity={1} />
               <pointLight position={[-5, -5, -5]} intensity={0.3} color="#00f2ff" />
-              <Flute3D holeStates={holeStates} />
+              <Flute3D holeStates={holeStates} currentNote={currentPitch} />
               <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
             </Canvas>
           </div>
@@ -160,6 +148,29 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
                   animate={{ width: frequency > 0 ? '75%' : '0%' }}
                   transition={{ duration: 0.3 }}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Session Stats */}
+          <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-5 flex flex-col space-y-3">
+            <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Session</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[9px] text-gray-600 font-bold">NOTES PLAYED</p>
+                <p className="text-sm text-white">{sessionNoteCount}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-600 font-bold">AVG LATENCY</p>
+                <p className="text-sm text-white">{summary.avgLatency.toFixed(1)}ms</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-600 font-bold">AVG CONFIDENCE</p>
+                <p className="text-sm text-white">{summary.avgConfidence.toFixed(3)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-600 font-bold">TOTAL NOTES</p>
+                <p className="text-sm text-white">{summary.totalNotes}</p>
               </div>
             </div>
           </div>

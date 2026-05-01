@@ -1,61 +1,68 @@
-const API_URL = import.meta.env.VITE_API_URL as string | undefined;
+// All data stored in localStorage — no backend needed
 
-export const hasBackend = !!API_URL;
-
-export async function detectLandmarks(landmarks: any[]): Promise<{
+export interface SessionMetric {
   note: string;
-  frequency: number;
-  holeStates: boolean[];
+  latency: number;
   confidence: number;
-  pressure: number;
-} | null> {
-  if (!API_URL) return null;
+  timestamp: string;
+}
+
+export interface CalibrationProfile {
+  id: string;
+  createdAt: string;
+  thresholds: Record<string, number>;
+}
+
+const METRICS_KEY = 'vismu_metrics';
+const CALIBRATION_KEY = 'vismu_calibration';
+
+export function logMetric(metric: Omit<SessionMetric, 'timestamp'>) {
   try {
-    const res = await fetch(`${API_URL}/api/detect/landmarks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ landmarks, timestamp: Date.now() }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      note: data.currentNote ?? '--',
-      frequency: data.frequency ?? 0,
-      holeStates: [
-        data.fingerState.thumb,
-        data.fingerState.index,
-        data.fingerState.middle,
-        data.fingerState.ring,
-        data.fingerState.pinky,
-        data.fingerState.extra,
-      ],
-      confidence: data.confidence ?? 0.95,
-      pressure: data.pressure?.[0] ?? 50,
-    };
+    const existing: SessionMetric[] = JSON.parse(localStorage.getItem(METRICS_KEY) || '[]');
+    existing.push({ ...metric, timestamp: new Date().toISOString() });
+    // Keep last 500 entries
+    if (existing.length > 500) existing.splice(0, existing.length - 500);
+    localStorage.setItem(METRICS_KEY, JSON.stringify(existing));
+  } catch { /* ignore */ }
+}
+
+export function getSessionMetrics(): SessionMetric[] {
+  try {
+    return JSON.parse(localStorage.getItem(METRICS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function clearSessionMetrics() {
+  localStorage.removeItem(METRICS_KEY);
+}
+
+export function saveCalibrationProfile(thresholds: Record<string, number>): CalibrationProfile {
+  const profile: CalibrationProfile = {
+    id: `profile_${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    thresholds,
+  };
+  localStorage.setItem(CALIBRATION_KEY, JSON.stringify(profile));
+  return profile;
+}
+
+export function getCalibrationProfile(): CalibrationProfile | null {
+  try {
+    const raw = localStorage.getItem(CALIBRATION_KEY);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-export async function logMetric(payload: {
-  note: string; latency: number; confidence: number; sessionId: string;
-}) {
-  if (!API_URL) return;
-  try {
-    await fetch(`${API_URL}/api/metrics/log`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, eventType: 'note_detected', timestamp: new Date().toISOString() }),
-    });
-  } catch { /* non-critical */ }
-}
-
-export async function getBackendStatus(): Promise<boolean> {
-  if (!API_URL) return false;
-  try {
-    const res = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(3000) });
-    return res.ok;
-  } catch {
-    return false;
-  }
+export function getPerformanceSummary() {
+  const metrics = getSessionMetrics();
+  if (!metrics.length) return { avgLatency: 0, avgConfidence: 0, totalNotes: 0 };
+  return {
+    avgLatency: metrics.reduce((s, m) => s + m.latency, 0) / metrics.length,
+    avgConfidence: metrics.reduce((s, m) => s + m.confidence, 0) / metrics.length,
+    totalNotes: metrics.filter(m => m.note !== '--').length,
+  };
 }

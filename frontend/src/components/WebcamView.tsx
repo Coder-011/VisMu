@@ -2,14 +2,13 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { HandTracking, detectNoteFromLandmarks } from '../systems/handTracking';
 import { useVisMuStore } from '../store/useVisMuStore';
 import { audioEngine } from '../systems/audioEngine';
-import { detectLandmarks, logMetric } from '../systems/api';
+import { logMetric } from '../systems/api';
 
 interface WebcamViewProps {
   initialized: boolean;
-  sessionId: string;
 }
 
-const WebcamView: React.FC<WebcamViewProps> = ({ initialized, sessionId }) => {
+const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handTrackingRef = useRef<HandTracking | null>(null);
@@ -59,7 +58,7 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized, sessionId }) => {
     if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
 
-  const processResults = useCallback(async (results: any) => {
+  const processResults = useCallback((results: any) => {
     const startTime = performance.now();
 
     if (results.multiHandLandmarks?.length > 0) {
@@ -67,22 +66,16 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized, sessionId }) => {
       setHandTrackingActive(true);
       drawLandmarks(landmarks);
 
-      const backendResult = await detectLandmarks(landmarks);
-      const clientResult = detectNoteFromLandmarks(landmarks);
-      const note = backendResult?.note ?? clientResult.note;
-      const freq = backendResult?.frequency ?? clientResult.freq;
-      const detection = backendResult ?? clientResult;
-
+      const detection = detectNoteFromLandmarks(landmarks);
       setConfidenceScore(detection.confidence);
-      setPitchData(note, freq);
+      setPitchData(detection.note, detection.freq);
       setHoleStates(detection.holeStates);
       setMetrics(detection.pressure, 88);
-      audioEngine.playNote(note);
+      audioEngine.playNote(detection.note);
 
       const latency = parseFloat((performance.now() - startTime).toFixed(1));
       setLatency(latency);
-
-      logMetric({ note, latency, confidence: detection.confidence, sessionId });
+      logMetric({ note: detection.note, latency, confidence: detection.confidence });
     } else {
       setHandTrackingActive(false);
       setConfidenceScore(0);
@@ -90,7 +83,7 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized, sessionId }) => {
       audioEngine.playNote(null);
       clearCanvas();
     }
-  }, [setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics, drawLandmarks, clearCanvas, sessionId]);
+  }, [setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics, drawLandmarks, clearCanvas]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -108,10 +101,10 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized, sessionId }) => {
           await videoRef.current.play();
         }
         handTrackingRef.current = new HandTracking(processResults);
-        interval = setInterval(async () => {
+        interval = setInterval(() => {
           const video = videoRef.current;
           if (video && video.readyState === 4 && handTrackingRef.current?.isReady()) {
-            await handTrackingRef.current.send(video);
+            handTrackingRef.current.send(video);
           }
         }, 50);
       } catch (err: any) {
