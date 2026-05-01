@@ -4,7 +4,11 @@ import { HandTracking, detectNoteFromLandmarks } from '../systems/handTracking';
 import { useVisMuStore } from '../store/useVisMuStore';
 import { audioEngine } from '../systems/audioEngine';
 
-const WebcamView: React.FC = () => {
+interface WebcamViewProps {
+  initialized: boolean;
+}
+
+const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
   const webcamRef = useRef<Webcam>(null);
   const handTrackingRef = useRef<HandTracking | null>(null);
   const [camError, setCamError] = useState(false);
@@ -24,8 +28,6 @@ const WebcamView: React.FC = () => {
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         setHandTrackingActive(true);
         const landmarks = results.multiHandLandmarks[0];
-
-        // All detection runs client-side — no backend needed
         const detection = detectNoteFromLandmarks(landmarks);
 
         setConfidenceScore(detection.confidence);
@@ -47,6 +49,8 @@ const WebcamView: React.FC = () => {
   );
 
   useEffect(() => {
+    if (!initialized) return;
+
     handTrackingRef.current = new HandTracking(processResults);
 
     const interval = setInterval(async () => {
@@ -64,7 +68,7 @@ const WebcamView: React.FC = () => {
       clearInterval(interval);
       handTrackingRef.current?.close();
     };
-  }, [processResults]);
+  }, [initialized, processResults]);
 
   return (
     <div className="relative w-full h-full">
