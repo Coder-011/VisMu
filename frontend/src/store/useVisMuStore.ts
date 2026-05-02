@@ -27,7 +27,7 @@ export const useVisMuStore = create<VisMuState>((set) => ({
   currentPitch: '--',
   frequency: 0,
   latency: 0,
-  holeStates: [false, false, false, false, false],
+  holeStates: [false, false, false, false, false, false],
   pressure: 0,
   resonance: 0,
   totalHolesClosed: 0,
@@ -47,7 +47,7 @@ export const useVisMuStore = create<VisMuState>((set) => ({
   setMetrics: (pressure, resonance) => set({ pressure, resonance }),
   resetSession: () => set({
     handTrackingActive: false, confidenceScore: 0, currentPitch: '--',
-    frequency: 0, latency: 0, holeStates: [false, false, false, false, false],
+    frequency: 0, latency: 0, holeStates: [false, false, false, false, false, false],
     pressure: 0, resonance: 0, totalHolesClosed: 0, sessionNoteCount: 0,
   }),
 }));

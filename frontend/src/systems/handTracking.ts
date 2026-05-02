@@ -1,15 +1,23 @@
 const TIP_IDS = [4,  8,  12, 16, 20];
 const MCP_IDS = [2,  5,   9, 13, 17];
 
+// C-scale bansuri — 6 holes
+// All 6 closed  → Sa  (C4, 261.6 Hz)
+// Open 1 hole   → Re  (D4, 293.7 Hz)  — open H6 (pinky side)
+// Open 2 holes  → Ga  (E4, 329.6 Hz)  — open H5+H6
+// Open 3 holes  → Ma  (F4, 349.2 Hz)  — open H4+H5+H6
+// Open 4 holes  → Pa  (G4, 392.0 Hz)  — open H3+H4+H5+H6
+// Open 5 holes  → Dha (A4, 440.0 Hz)  — open H2+H3+H4+H5+H6
+// Open 6 holes  → Ni  (B4, 493.9 Hz)  — all open
+// All open      → Sa' (C5, 523.3 Hz)  — same as all open (octave)
 const NOTE_MAP: Record<string, { note: string; freq: number }> = {
-  '11111': { note: 'Sa',  freq: 261.6 },
-  '11110': { note: 'Re',  freq: 293.7 },
-  '11100': { note: 'Ga',  freq: 329.6 },
-  '11000': { note: 'Ma',  freq: 349.2 },
-  '10000': { note: 'Pa',  freq: 392.0 },
-  '10001': { note: 'Dha', freq: 440.0 },
-  '10011': { note: 'Ni',  freq: 493.9 },
-  '00000': { note: "Sa'", freq: 523.3 },
+  '111111': { note: 'Sa',  freq: 261.6 },
+  '111110': { note: 'Re',  freq: 293.7 },
+  '111100': { note: 'Ga',  freq: 329.6 },
+  '111000': { note: 'Ma',  freq: 349.2 },
+  '110000': { note: 'Pa',  freq: 392.0 },
+  '100000': { note: 'Dha', freq: 440.0 },
+  '000000': { note: 'Ni',  freq: 493.9 },
 };
 
 const FREQ_BY_NOTE: Record<string, number> = {};
@@ -27,21 +35,25 @@ export function detectNoteFromLandmarks(landmarks: any[]): {
 } {
   const wrist = landmarks[0], middleMcp = landmarks[9];
   if (!wrist || !middleMcp) {
-    return { note: '--', freq: 0, holeStates: Array(5).fill(false), confidence: 0, pressure: 0 };
+    return { note: '--', freq: 0, holeStates: Array(6).fill(false), confidence: 0, pressure: 0 };
   }
 
   const palmSize = Math.hypot(middleMcp.x - wrist.x, middleMcp.y - wrist.y) || 0.1;
 
-  const holeStates = TIP_IDS.map((tipId, i) => {
+  // 5 fingers → 6 holes (H6 mirrors H5/pinky)
+  const fingers = TIP_IDS.map((tipId, i) => {
     const tip = landmarks[tipId], mcp = landmarks[MCP_IDS[i]];
     if (!tip || !mcp) return false;
     if (i === 0) {
+      // Thumb: closed when tip near index MCP
       const iMcp = landmarks[5];
       return iMcp ? Math.hypot(tip.x - iMcp.x, tip.y - iMcp.y) < palmSize * 0.6 : false;
     }
+    // Finger closed: tip is ABOVE mcp (mcp.y > tip.y in MediaPipe coords)
     return (mcp.y - tip.y) > palmSize * 0.1;
   });
 
+  const holeStates: boolean[] = [...fingers, fingers[4]]; // H6 = pinky mirror
   const key = holeStates.map(s => s ? '1' : '0').join('');
   const note = smoothNote(NOTE_MAP[key]?.note ?? '--');
 
@@ -57,20 +69,6 @@ export function detectNoteFromLandmarks(landmarks: any[]): {
   };
 }
 
-// Path configs — CDN first for all environments, no hardcoded deployment paths
-const PATH_CONFIGS = [
-  {
-    wasm: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm',
-    model: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-    label: 'CDN (jsDelivr/GCS)',
-  },
-  {
-    wasm: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm',
-    model: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.16/wasm/hand_landmarker.task',
-    label: 'CDN (jsDelivr full)',
-  },
-];
-
 export class HandTracking {
   private landmarker: any = null;
   private onResults: (r: any) => void;
@@ -85,12 +83,12 @@ export class HandTracking {
 
   private async initAsync() {
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Model load timed out after 30s')), 30000)
+      setTimeout(() => reject(new Error('timeout after 30s')), 30000)
     );
     try {
       await Promise.race([this.load(), timeout]);
     } catch (err: any) {
-      console.error('⚠️ HandLandmarker failed to load:', err?.message ?? err);
+      console.error('⚠️ HandLandmarker failed:', err?.message ?? err);
       this.failed = true;
     }
   }
@@ -99,32 +97,38 @@ export class HandTracking {
     const vision = await import('@mediapipe/tasks-vision');
     const { HandLandmarker, FilesetResolver } = vision;
 
-    let lastError = '';
+    // BASE_URL is '/' on localhost, '/VisMu/' on GitHub Pages — set by Vite
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const localWasm = `${window.location.origin}${base}/mediapipe`;
+    const localModel = `${window.location.origin}${base}/mediapipe/hand_landmarker.task`;
+    const cdnModel = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
-    for (const { wasm, model, label } of PATH_CONFIGS) {
+    const configs = [
+      { wasm: localWasm, model: localModel,  label: 'local' },
+      { wasm: localWasm, model: cdnModel,    label: 'local-wasm/cdn-model' },
+    ];
+
+    let lastErr = '';
+    for (const { wasm, model, label } of configs) {
       for (const delegate of ['GPU', 'CPU'] as const) {
         try {
-          console.log(`Trying ${label} with ${delegate}...`);
-          const filesetResolver = await FilesetResolver.forVisionTasks(wasm);
-          this.landmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+          console.log(`[HandTracking] trying ${label} / ${delegate} — wasm: ${wasm}`);
+          const fs = await FilesetResolver.forVisionTasks(wasm);
+          this.landmarker = await HandLandmarker.createFromOptions(fs, {
             baseOptions: { modelAssetPath: model, delegate },
             runningMode: 'VIDEO',
             numHands: 1,
           });
-          console.log(`✅ HandLandmarker loaded: ${label} / ${delegate}`);
+          console.log(`✅ HandLandmarker ready: ${label} / ${delegate}`);
           this.ready = true;
           return;
         } catch (err: any) {
-          lastError = err?.message ?? String(err);
-          console.warn(`❌ ${label} (${delegate}) failed: ${lastError}`);
+          lastErr = err?.message ?? String(err);
+          console.warn(`❌ ${label} / ${delegate}: ${lastErr}`);
         }
       }
     }
-
-    throw new Error(
-      `All path/delegate combinations failed. Last error: "${lastError}". ` +
-      `Check network connectivity and CORS headers.`
-    );
+    throw new Error(`All attempts failed. Last error: ${lastErr}`);
   }
 
   public isReady() { return this.ready; }
