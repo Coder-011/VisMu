@@ -13,7 +13,9 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handTrackingRef = useRef<HandTracking | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
   const [camError, setCamError] = useState<string | null>(null);
+  const [modelLoading, setModelLoading] = useState(true);
 
   const {
     setHandTrackingActive, setConfidenceScore,
@@ -26,16 +28,20 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
     if (!canvas || !video) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth || canvas.offsetWidth;
+    canvas.height = video.videoHeight || canvas.offsetHeight;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const connections = [
-      [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
-      [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
-      [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17],
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [0,9],[9,10],[10,11],[11,12],
+      [0,13],[13,14],[14,15],[15,16],
+      [0,17],[17,18],[18,19],[19,20],
+      [5,9],[9,13],[13,17],
     ];
-    ctx.strokeStyle = 'rgba(0,242,255,0.5)';
+
+    ctx.strokeStyle = 'rgba(0,242,255,0.6)';
     ctx.lineWidth = 2;
     for (const [a, b] of connections) {
       const lmA = landmarks[a], lmB = landmarks[b];
@@ -45,10 +51,14 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
       ctx.lineTo(lmB.x * canvas.width, lmB.y * canvas.height);
       ctx.stroke();
     }
-    for (const lm of landmarks) {
+
+    // Fingertips in accent colour, rest in cyan
+    const tipIds = new Set([4, 8, 12, 16, 20]);
+    for (let i = 0; i < landmarks.length; i++) {
+      const lm = landmarks[i];
       ctx.beginPath();
-      ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#00f2ff';
+      ctx.arc(lm.x * canvas.width, lm.y * canvas.height, tipIds.has(i) ? 6 : 3, 0, Math.PI * 2);
+      ctx.fillStyle = tipIds.has(i) ? '#ffffff' : '#00f2ff';
       ctx.fill();
     }
   }, []);
@@ -60,19 +70,16 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
 
   const processResults = useCallback((results: any) => {
     const startTime = performance.now();
-
     if (results.multiHandLandmarks?.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
       setHandTrackingActive(true);
       drawLandmarks(landmarks);
-
       const detection = detectNoteFromLandmarks(landmarks);
       setConfidenceScore(detection.confidence);
       setPitchData(detection.note, detection.freq);
       setHoleStates(detection.holeStates);
       setMetrics(detection.pressure, 88);
       audioEngine.playNote(detection.note);
-
       const latency = parseFloat((performance.now() - startTime).toFixed(1));
       setLatency(latency);
       logMetric({ note: detection.note, latency, confidence: detection.confidence });
@@ -87,7 +94,6 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
 
   useEffect(() => {
     if (!initialized) return;
-    let interval: ReturnType<typeof setInterval>;
 
     const startCamera = async () => {
       try {
@@ -96,25 +102,37 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
           audio: false,
         });
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        handTrackingRef.current = new HandTracking(processResults);
-        interval = setInterval(() => {
-          const video = videoRef.current;
-          if (video && video.readyState === 4 && handTrackingRef.current?.isReady()) {
-            handTrackingRef.current.send(video);
+        const video = videoRef.current!;
+        video.srcObject = stream;
+        await video.play();
+
+        // Init hand tracking
+        const tracker = new HandTracking(processResults);
+        handTrackingRef.current = tracker;
+
+        // Poll until model ready, then switch to rAF loop
+        const waitForModel = setInterval(() => {
+          if (tracker.isReady()) {
+            clearInterval(waitForModel);
+            setModelLoading(false);
+
+            const loop = () => {
+              if (video.readyState === 4) tracker.send(video);
+              rafRef.current = requestAnimationFrame(loop);
+            };
+            rafRef.current = requestAnimationFrame(loop);
           }
-        }, 50);
+        }, 200);
+
       } catch (err: any) {
         setCamError(err?.message ?? 'Camera unavailable');
       }
     };
 
     startCamera();
+
     return () => {
-      clearInterval(interval);
+      cancelAnimationFrame(rafRef.current);
       handTrackingRef.current?.close();
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
@@ -123,15 +141,36 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
   if (camError) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-neutral-900">
-        <p className="text-red-400 text-xs text-center px-4">{camError}</p>
+        <div className="text-center space-y-2 px-4">
+          <p className="text-red-400 text-xs">{camError}</p>
+          <p className="text-gray-600 text-[10px]">Check camera permissions and reload</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="relative w-full h-full">
-      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ transform: 'scaleX(-1)' }} />
+      <video
+        ref={videoRef}
+        className="w-full h-full object-cover"
+        playsInline
+        muted
+        style={{ transform: 'scaleX(-1)' }}
+      />
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ transform: 'scaleX(-1)' }}
+      />
+      {initialized && modelLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
+          <div className="text-center space-y-2">
+            <div className="w-6 h-6 border-2 border-[#00f2ff] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-[10px] text-[#00f2ff] font-bold tracking-widest">LOADING MODEL...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
