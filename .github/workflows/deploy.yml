@@ -31,10 +31,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: './frontend/package-lock.json'
 
-      - name: Install Frontend Dependencies
+      - name: Install Dependencies
         run: cd frontend && npm install
 
-      - name: Build Frontend
+      - name: Build
         run: cd frontend && npm run build
 
       - name: Setup Pages
@@ -45,6 +45,6 @@ jobs:
         with:
           path: './frontend/dist'
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5

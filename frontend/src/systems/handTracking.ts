@@ -103,9 +103,11 @@ export class HandTracking {
     const localModel = `${window.location.origin}${base}/mediapipe/hand_landmarker.task`;
     const cdnModel = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
+    const cdnWasm = 'https://unpkg.com/@mediapipe/tasks-vision@0.10.3/wasm';
+
     const configs = [
-      { wasm: localWasm, model: localModel,  label: 'local' },
-      { wasm: localWasm, model: cdnModel,    label: 'local-wasm/cdn-model' },
+      { wasm: localWasm, model: localModel, label: 'local' },
+      { wasm: cdnWasm,   model: cdnModel,   label: 'cdn'   },
     ];
 
     let lastErr = '';
