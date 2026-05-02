@@ -120,13 +120,14 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
             <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
             <p className="text-[9px] text-gray-600">Drag to rotate</p>
           </div>
-          <div style={{ height: '220px' }}>
-            <Canvas camera={{ position: [0, 1.8, 5.5], fov: 50 }}>
-              <ambientLight intensity={0.6} />
-              <pointLight position={[3, 4, 4]} intensity={1.5} />
-              <pointLight position={[-3, -2, 3]} intensity={0.5} color="#00f2ff" />
+          <div style={{ height: '220px', width: '100%' }}>
+            <Canvas camera={{ position: [0, 1.2, 5], fov: 55 }}>
+              <ambientLight intensity={0.7} />
+              <pointLight position={[4, 5, 4]} intensity={1.8} />
+              <pointLight position={[-4, -2, 3]} intensity={0.6} color="#ffcc88" />
+              <pointLight position={[0, 3, 2]} intensity={0.4} color="#00f2ff" />
               <Flute3D holeStates={holeStates} currentNote={currentPitch} />
-              <OrbitControls enableZoom={false} />
+              <OrbitControls enableZoom={false} enablePan={false} />
             </Canvas>
           </div>
         </div>
@@ -192,7 +193,7 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-[#1a1a1a]">
               <span className="text-[10px] text-gray-500 font-bold">Holes Closed</span>
-              <span className="bg-[#111] px-3 py-1 rounded text-xs font-mono text-[#00f2ff]">{totalHolesClosed} / 6</span>
+              <span className="bg-[#111] px-3 py-1 rounded text-xs font-mono text-[#00f2ff]">{totalHolesClosed} / 5</span>
             </div>
           </div>
         </div>
