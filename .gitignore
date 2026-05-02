@@ -9,6 +9,19 @@ frontend/dist/
 backend/dist/
 backend/vismu.db
 
+# Compiled TS output sitting next to source files
+backend/src/**/*.js
+backend/src/**/*.js.map
+backend/src/**/*.d.ts
+backend/src/**/*.d.ts.map
+frontend/src/**/*.js
+frontend/src/**/*.js.map
+frontend/src/**/*.d.ts
+frontend/src/**/*.d.ts.map
+frontend/vite.config.js
+frontend/vite.config.d.ts
+frontend/tsconfig.json
+
 # Environment variables
 .env
 backend/.env
@@ -19,3 +32,6 @@ frontend/.env
 .vscode/
 .idea/
 *.log
+
+# Misc
+stitch_project.html
