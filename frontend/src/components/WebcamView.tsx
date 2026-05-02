@@ -11,25 +11,20 @@ interface WebcamViewProps {
 const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handTrackingRef = useRef<HandTracking | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
+  const activeRef = useRef(false);
   const [camError, setCamError] = useState<string | null>(null);
   const [modelLoading, setModelLoading] = useState(true);
 
-  const {
-    setHandTrackingActive, setConfidenceScore,
-    setPitchData, setLatency, setHoleStates, setMetrics,
-  } = useVisMuStore();
+  const storeRef = useRef(useVisMuStore.getState());
+  useEffect(() => useVisMuStore.subscribe(s => { storeRef.current = s; }), []);
 
-  const drawLandmarks = useCallback((landmarks: any[]) => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return;
+  const drawLandmarks = useCallback((landmarks: any[], canvas: HTMLCanvasElement, video: HTMLVideoElement) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    canvas.width = video.videoWidth || canvas.offsetWidth;
-    canvas.height = video.videoHeight || canvas.offsetHeight;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const connections = [
@@ -40,8 +35,7 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
       [0,17],[17,18],[18,19],[19,20],
       [5,9],[9,13],[13,17],
     ];
-
-    ctx.strokeStyle = 'rgba(0,242,255,0.6)';
+    ctx.strokeStyle = 'rgba(0,242,255,0.7)';
     ctx.lineWidth = 2;
     for (const [a, b] of connections) {
       const lmA = landmarks[a], lmB = landmarks[b];
@@ -51,49 +45,19 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
       ctx.lineTo(lmB.x * canvas.width, lmB.y * canvas.height);
       ctx.stroke();
     }
-
-    // Fingertips in accent colour, rest in cyan
     const tipIds = new Set([4, 8, 12, 16, 20]);
     for (let i = 0; i < landmarks.length; i++) {
       const lm = landmarks[i];
       ctx.beginPath();
-      ctx.arc(lm.x * canvas.width, lm.y * canvas.height, tipIds.has(i) ? 6 : 3, 0, Math.PI * 2);
+      ctx.arc(lm.x * canvas.width, lm.y * canvas.height, tipIds.has(i) ? 7 : 4, 0, Math.PI * 2);
       ctx.fillStyle = tipIds.has(i) ? '#ffffff' : '#00f2ff';
       ctx.fill();
     }
   }, []);
 
-  const clearCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
-  }, []);
-
-  const processResults = useCallback((results: any) => {
-    const startTime = performance.now();
-    if (results.multiHandLandmarks?.length > 0) {
-      const landmarks = results.multiHandLandmarks[0];
-      setHandTrackingActive(true);
-      drawLandmarks(landmarks);
-      const detection = detectNoteFromLandmarks(landmarks);
-      setConfidenceScore(detection.confidence);
-      setPitchData(detection.note, detection.freq);
-      setHoleStates(detection.holeStates);
-      setMetrics(detection.pressure, 88);
-      audioEngine.playNote(detection.note);
-      const latency = parseFloat((performance.now() - startTime).toFixed(1));
-      setLatency(latency);
-      logMetric({ note: detection.note, latency, confidence: detection.confidence });
-    } else {
-      setHandTrackingActive(false);
-      setConfidenceScore(0);
-      setPitchData('--', 0);
-      audioEngine.playNote(null);
-      clearCanvas();
-    }
-  }, [setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics, drawLandmarks, clearCanvas]);
-
   useEffect(() => {
     if (!initialized) return;
+    activeRef.current = true;
 
     const startCamera = async () => {
       try {
@@ -101,42 +65,82 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
           audio: false,
         });
+        if (!activeRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
         const video = videoRef.current!;
         video.srcObject = stream;
         await video.play();
 
-        // Init hand tracking
-        const tracker = new HandTracking(processResults);
-        handTrackingRef.current = tracker;
+        // Create tracker — pass a stable ref-based callback
+        const tracker = new HandTracking((results: any) => {
+          if (!activeRef.current) return;
+          const startTime = performance.now();
+          const { setHandTrackingActive, setConfidenceScore, setPitchData, setLatency, setHoleStates, setMetrics } = storeRef.current;
 
-        // Poll until model ready, then switch to rAF loop
-        const waitForModel = setInterval(() => {
+          if (results.multiHandLandmarks?.length > 0) {
+            const landmarks = results.multiHandLandmarks[0];
+            setHandTrackingActive(true);
+            const canvas = canvasRef.current;
+            const vid = videoRef.current;
+            if (canvas && vid) drawLandmarks(landmarks, canvas, vid);
+
+            const detection = detectNoteFromLandmarks(landmarks);
+            setConfidenceScore(detection.confidence);
+            setPitchData(detection.note, detection.freq);
+            setHoleStates(detection.holeStates);
+            setMetrics(detection.pressure, 88);
+            audioEngine.playNote(detection.note);
+
+            const latency = parseFloat((performance.now() - startTime).toFixed(1));
+            setLatency(latency);
+            logMetric({ note: detection.note, latency, confidence: detection.confidence });
+          } else {
+            setHandTrackingActive(false);
+            setConfidenceScore(0);
+            setPitchData('--', 0);
+            audioEngine.playNote(null);
+            const canvas = canvasRef.current;
+            if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+          }
+        });
+
+        // Wait for model, then start rAF loop
+        const waitId = setInterval(() => {
+          if (!activeRef.current) { clearInterval(waitId); return; }
           if (tracker.isReady()) {
-            clearInterval(waitForModel);
+            clearInterval(waitId);
             setModelLoading(false);
-
             const loop = () => {
+              if (!activeRef.current) return;
               if (video.readyState === 4) tracker.send(video);
               rafRef.current = requestAnimationFrame(loop);
             };
             rafRef.current = requestAnimationFrame(loop);
           }
-        }, 200);
+        }, 300);
+
+        // Store tracker for cleanup
+        (video as any)._tracker = tracker;
+        (video as any)._waitId = waitId;
 
       } catch (err: any) {
-        setCamError(err?.message ?? 'Camera unavailable');
+        setCamError(err?.message ?? 'Camera unavailable — check permissions');
       }
     };
 
     startCamera();
 
     return () => {
+      activeRef.current = false;
       cancelAnimationFrame(rafRef.current);
-      handTrackingRef.current?.close();
+      const video = videoRef.current;
+      if (video) {
+        clearInterval((video as any)._waitId);
+        (video as any)._tracker?.close();
+      }
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
-  }, [initialized, processResults]);
+  }, [initialized, drawLandmarks]); // stable deps only
 
   if (camError) {
     return (
@@ -151,23 +155,14 @@ const WebcamView: React.FC<WebcamViewProps> = ({ initialized }) => {
 
   return (
     <div className="relative w-full h-full">
-      <video
-        ref={videoRef}
-        className="w-full h-full object-cover"
-        playsInline
-        muted
-        style={{ transform: 'scaleX(-1)' }}
-      />
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ transform: 'scaleX(-1)' }}
-      />
+      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted style={{ transform: 'scaleX(-1)' }} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ transform: 'scaleX(-1)' }} />
       {initialized && modelLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
-          <div className="text-center space-y-2">
-            <div className="w-6 h-6 border-2 border-[#00f2ff] border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-[10px] text-[#00f2ff] font-bold tracking-widest">LOADING MODEL...</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-[#00f2ff] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-[11px] text-[#00f2ff] font-bold tracking-widest">LOADING AI MODEL...</p>
+            <p className="text-[9px] text-gray-500">First load may take ~10s</p>
           </div>
         </div>
       )}

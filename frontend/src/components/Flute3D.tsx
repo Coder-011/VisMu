@@ -1,126 +1,104 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Cylinder, Text } from '@react-three/drei';
+import { Cylinder } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface Flute3DProps {
   holeStates: boolean[];
   currentNote?: string;
-  confidence?: number;
 }
+
+// Hole positions along X axis (flute length = 8 units, centred at 0)
+const HOLE_X = [-2.4, -1.6, -0.8, 0, 0.8, 1.6];
 
 const Flute3D: React.FC<Flute3DProps> = ({ holeStates, currentNote = '--' }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const timeRef = useRef(0);
+  const t = useRef(0);
 
   useFrame((state) => {
-    timeRef.current = state.clock.getElapsedTime();
+    t.current = state.clock.getElapsedTime();
     if (groupRef.current) {
-      // Gentle floating animation
-      groupRef.current.position.y = Math.sin(timeRef.current * 0.5) * 0.1;
-      groupRef.current.rotation.z = Math.sin(timeRef.current * 0.3) * 0.05;
+      // Gentle float only — no rotation so it stays horizontal
+      groupRef.current.position.y = Math.sin(t.current * 0.6) * 0.08;
     }
   });
 
   return (
-    <group ref={groupRef} rotation={[0, 0, Math.PI / 2]}>
-      {/* Main Bamboo Body */}
-      <Cylinder args={[0.3, 0.3, 8, 32]} rotation={[0, 0, 0]}>
-        <meshStandardMaterial 
-          color="#3d2b1f" 
-          roughness={0.9} 
-          metalness={0.05} 
-        />
+    <group ref={groupRef}>
+      {/* Bamboo body — horizontal along X */}
+      <Cylinder args={[0.28, 0.28, 8, 32]} rotation={[0, 0, Math.PI / 2]}>
+        <meshStandardMaterial color="#5c3d1e" roughness={0.85} metalness={0.05} />
       </Cylinder>
 
-      {/* Holes with enhanced glow effects */}
-      {[0, 1, 2, 3, 4, 5].map((idx) => {
-        const isActive = holeStates[idx];
-        const glowIntensity = isActive ? 2 : 0;
-        
+      {/* Bamboo surface grain lines */}
+      {[-3, -1.5, 0, 1.5, 3].map((x, i) => (
+        <Cylinder key={i} args={[0.285, 0.285, 0.08, 32]} rotation={[0, 0, Math.PI / 2]} position={[x, 0, 0]}>
+          <meshStandardMaterial color="#3a2010" roughness={1} metalness={0} />
+        </Cylinder>
+      ))}
+
+      {/* Mouthpiece end cap */}
+      <Cylinder args={[0.3, 0.3, 0.15, 32]} rotation={[0, 0, Math.PI / 2]} position={[-4.1, 0, 0]}>
+        <meshStandardMaterial color="#2a1a08" roughness={0.9} />
+      </Cylinder>
+
+      {/* Holes */}
+      {HOLE_X.map((x, idx) => {
+        const closed = holeStates[idx] ?? false;
+        const pulse = closed ? 1.2 + Math.sin(t.current * 4 + idx) * 0.3 : 0;
+
         return (
-          <group key={idx} position={[0, (idx - 2.5) * 0.8, 0.3]}>
-             {/* Hole base */}
-             <mesh rotation={[Math.PI / 2, 0, 0]}>
-               <circleGeometry args={[0.12, 32]} />
-               <meshStandardMaterial 
-                 color={isActive ? "#00f2ff" : "#1a1a1a"}
-                 emissive={isActive ? "#00f2ff" : "#000000"}
-                 emissiveIntensity={isActive ? 1.5 + Math.sin(timeRef.current * 3) * 0.3 : 0}
-                 transparent
-                 opacity={0.9}
-               />
-             </mesh>
-            
-            {/* Inner glow ring */}
-            {isActive && (
-              <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[0.08, 0.12, 32]} />
-                <meshBasicMaterial 
-                  color="#00f2ff"
-                  transparent
-                  opacity={0.6}
-                />
-              </mesh>
-            )}
-            
-            {/* Outer glow effect */}
-            {isActive && (
-              <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[0.12, 0.2, 32]} />
-                <meshBasicMaterial 
-                  color="#00f2ff"
-                  transparent
-                  opacity={0.2}
-                />
-              </mesh>
-            )}
-            
-            {/* Point light for glow */}
-            {isActive && (
-              <pointLight 
-                color="#00f2ff" 
-                intensity={glowIntensity} 
-                distance={1.5} 
-                decay={2}
+          <group key={idx} position={[x, 0.29, 0]}>
+            {/* Hole rim (dark ring always visible) */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.09, 0.14, 32]} />
+              <meshStandardMaterial color="#1a0e05" roughness={1} />
+            </mesh>
+
+            {/* Hole fill — dark when open, glowing when closed */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[0.09, 32]} />
+              <meshStandardMaterial
+                color={closed ? '#00f2ff' : '#0a0a0a'}
+                emissive={closed ? '#00f2ff' : '#000000'}
+                emissiveIntensity={closed ? pulse : 0}
+                roughness={0.2}
+                metalness={0.1}
               />
+            </mesh>
+
+            {/* Outer glow ring when closed */}
+            {closed && (
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.09, 0.22, 32]} />
+                <meshBasicMaterial color="#00f2ff" transparent opacity={0.25 + Math.sin(t.current * 4 + idx) * 0.1} />
+              </mesh>
             )}
+
+            {/* Point light for neon glow */}
+            {closed && (
+              <pointLight color="#00f2ff" intensity={3} distance={1.2} decay={2} />
+            )}
+
+            {/* Hole label */}
+            <mesh position={[0, 0.28, 0]}>
+              <planeGeometry args={[0.25, 0.12]} />
+              <meshBasicMaterial transparent opacity={0} />
+            </mesh>
           </group>
         );
       })}
 
-       {/* Bamboo Bindings (Threads) */}
-       {[-3.5, -2, 0, 2, 3.5].map((pos, idx) => (
-         <Cylinder key={idx} args={[0.31, 0.31, 0.1, 32]} position={[0, pos, 0]}>
-           <meshStandardMaterial color="#8b0000" />
-         </Cylinder>
-       ))}
-
-       {/* Current Note Display */}
-       <Text
-         position={[0, 3, 0]}
-         color="#00f2ff"
-         fontSize={0.6}
-         anchorX="center"
-         anchorY="middle"
-       >
-         {currentNote}
-       </Text>
-
-       {/* Hole Labels */}
-       {[0, 1, 2, 3, 4, 5].map((idx) => (
-         <Text
-           key={`label-${idx}`}
-           position={[0.4, (idx - 2.5) * 0.8, 0.3]}
-           color="#666"
-           fontSize={0.2}
-           anchorX="left"
-           anchorY="middle"
-         >
-           {`H${idx + 1}`}
-         </Text>
-       ))}
-     </group>
+      {/* Note display — floating above centre */}
+      {currentNote !== '--' && (
+        <group position={[0, 1.1, 0]}>
+          <mesh>
+            <planeGeometry args={[1.2, 0.5]} />
+            <meshBasicMaterial color="#000000" transparent opacity={0.6} />
+          </mesh>
+        </group>
+      )}
+    </group>
   );
 };
 

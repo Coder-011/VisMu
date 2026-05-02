@@ -121,12 +121,12 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
             <p className="text-[9px] text-gray-600">Drag to rotate</p>
           </div>
           <div className="h-48 sm:h-56">
-            <Canvas camera={{ position: [0, 0, 6], fov: 50 }}>
-              <ambientLight intensity={0.4} />
-              <pointLight position={[5, 5, 5]} intensity={1} />
-              <pointLight position={[-5, -5, -5]} intensity={0.3} color="#00f2ff" />
+            <Canvas camera={{ position: [0, 2.5, 7], fov: 45 }}>
+              <ambientLight intensity={0.5} />
+              <pointLight position={[0, 5, 5]} intensity={1.2} />
+              <pointLight position={[0, -3, 3]} intensity={0.4} color="#00f2ff" />
               <Flute3D holeStates={holeStates} currentNote={currentPitch} />
-              <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={0.5} />
+              <OrbitControls enableZoom={false} autoRotate={false} maxPolarAngle={Math.PI / 2} />
             </Canvas>
           </div>
         </div>
