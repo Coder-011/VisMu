@@ -115,18 +115,18 @@ const Dashboard: React.FC<DashboardProps> = ({ initialized }) => {
         </div>
 
         {/* 3D Flute */}
-        <div className="lg:col-span-4 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
+        <div className="lg:col-span-4 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl">
           <div className="px-5 pt-4 pb-2 flex items-center justify-between">
             <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">3D Flute Model</p>
             <p className="text-[9px] text-gray-600">Drag to rotate</p>
           </div>
-          <div className="h-48 sm:h-56">
-            <Canvas camera={{ position: [0, 2.5, 7], fov: 45 }}>
-              <ambientLight intensity={0.5} />
-              <pointLight position={[0, 5, 5]} intensity={1.2} />
-              <pointLight position={[0, -3, 3]} intensity={0.4} color="#00f2ff" />
+          <div style={{ height: '220px' }}>
+            <Canvas camera={{ position: [0, 1.8, 5.5], fov: 50 }}>
+              <ambientLight intensity={0.6} />
+              <pointLight position={[3, 4, 4]} intensity={1.5} />
+              <pointLight position={[-3, -2, 3]} intensity={0.5} color="#00f2ff" />
               <Flute3D holeStates={holeStates} currentNote={currentPitch} />
-              <OrbitControls enableZoom={false} autoRotate={false} maxPolarAngle={Math.PI / 2} />
+              <OrbitControls enableZoom={false} />
             </Canvas>
           </div>
         </div>
